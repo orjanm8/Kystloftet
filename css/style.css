@@ -321,6 +321,38 @@ html, body {
 
 .layer-opt input { cursor: pointer; accent-color: var(--blue-600); }
 
+/* ─── STRANDSONE-VARSEL ─────────────────────────────────────────── */
+
+#strandsone-notice {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  line-height: 1.4;
+}
+
+#strandsone-notice.notice-sea {
+  background: var(--blue-100);
+  color: var(--blue-600);
+  border: 1px solid #bae6fd;
+}
+
+#strandsone-notice.notice-land {
+  background: var(--amber-100);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+#strandsone-notice a {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
 
 #sidebar {

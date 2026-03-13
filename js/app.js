@@ -70,26 +70,26 @@ document.querySelectorAll('input[name="basemap"]').forEach((radio) => {
 
 // ─── OVERLAY-KARTLAG ──────────────────────────────────────────────────────────
 
-// Dybdekonturer – Kartverket sjøkart WMS (transparent overlay)
-const depthLayer = L.tileLayer.wms(
-  "https://openwms.statkart.no/skwms1/wms.sjokartraster2",
+// Dybdekonturer – Kartverket sjøkart WMTS (samme infrastruktur som topo-laget)
+const depthLayer = L.tileLayer(
+  "https://cache.kartverket.no/v1/wmts/1.0.0/sjokartnorge/default/webmercator/{z}/{y}/{x}.png",
   {
-    layers: "sjokartraster",
-    format: "image/png",
-    transparent: true,
-    opacity: 0.6,
     attribution: ATTRIBUTION_KARTVERKET,
+    maxZoom: 18,
+    opacity: 0.75,
   }
 );
 
-// Verneområder – Miljødirektoratet WMS
+// Verneområder – Miljødirektoratet WMS (alle lag, versjon 1.1.1)
 const vernLayer = L.tileLayer.wms(
   "https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer",
   {
-    layers: "0",
+    layers: "0,1,2,3,4,5,6,7,8,9,10,11,12",
+    styles: "",
     format: "image/png",
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.5,
+    version: "1.1.1",
     attribution:
       '&copy; <a href="https://www.miljodirektoratet.no">Miljødirektoratet</a>',
   }
@@ -103,22 +103,38 @@ async function loadHarbors() {
   if (harborsLoaded) return;
   harborsLoaded = true;
   try {
-    const query = `[out:json][timeout:30];(node["harbour"](57,4,72,32);node["seamark:type"="harbour"](57,4,72,32););out body;`;
+    // Hent havner, brygger og ferjekaier – både noder og flater (way med center)
+    const query = [
+      "[out:json][timeout:30];",
+      "(",
+      'node["harbour"](57,4,72,32);',
+      'node["seamark:type"="harbour"](57,4,72,32);',
+      'node["amenity"="ferry_terminal"](57,4,72,32);',
+      'way["harbour"](57,4,72,32);',
+      'way["amenity"="ferry_terminal"](57,4,72,32);',
+      ");",
+      "out body center;",
+    ].join("");
     const res = await fetch(
       `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`
     );
     const data = await res.json();
-    data.elements.forEach((node) => {
-      const name = node.tags.name || node.tags["name:no"] || "Havn";
-      L.circleMarker([node.lat, node.lon], {
-        radius: 6,
+    data.elements.forEach((el) => {
+      // Noder har lat/lon, ways får center fra "out center"
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!lat || !lon) return;
+      const name = el.tags.name || el.tags["name:no"] || "Havn / kai";
+      const isFerry = el.tags.amenity === "ferry_terminal";
+      L.circleMarker([lat, lon], {
+        radius: isFerry ? 7 : 6,
         color: "#1e3a5f",
-        fillColor: "#2563eb",
+        fillColor: isFerry ? "#0369a1" : "#2563eb",
         fillOpacity: 0.85,
         weight: 1.5,
       })
-        .bindTooltip(name, { direction: "top", offset: [0, -6] })
-        .bindPopup(`<strong>${name}</strong>`)
+        .bindTooltip(name, { direction: "top", offset: [0, -7] })
+        .bindPopup(`<strong>${name}</strong>${isFerry ? "<br><em>Ferjekai</em>" : ""}`)
         .addTo(harborGroup);
     });
   } catch (err) {
@@ -419,7 +435,7 @@ function displayResults(context, geoInfo, meta) {
       : "Lovverk – Sjøareal";
 
   renderLawList(context, currentFilter);
-  renderStrandsonePanel(context);
+  renderStrandsoneNotice(context);
   renderMAREANOPanel(context);
   showResults();
 }
@@ -541,48 +557,23 @@ function topicBadgeName(t) {
   return names[t] || t;
 }
 
-// ─── VERKTØYKASSE: STRANDSONEBELTET ─────────────────────────────────────────
+// ─── STRANDSONEVARSEL (liten infoboks) ───────────────────────────────────────
 
-function renderStrandsonePanel(context) {
-  const el = document.getElementById("panel-strandsone");
-  const inSea = context.isSeaArea;
-  const tag = inSea
-    ? `<span class="info-panel-tag tag-sea">I sjøen</span>`
-    : `<span class="info-panel-tag tag-land">Kystkommune</span>`;
+function renderStrandsoneNotice(context) {
+  const el = document.getElementById("strandsone-notice");
+  el.className = ""; // fjern hidden + evt. gamle klasser
 
-  const kommuneLink = context.kommunenavn
-    ? `<a class="info-link" href="https://www.google.com/search?q=${encodeURIComponent(context.kommunenavn + " kommune strandsoneplan")}" target="_blank" rel="noopener">Søk etter ${context.kommunenavn} kommunes strandsoneplan →</a>`
-    : "";
-
-  el.innerHTML = `
-    <div class="info-panel-hdr">
-      <div class="info-panel-icon">🏖️</div>
-      <div class="info-panel-meta">
-        <div class="info-panel-title">Strandsonebeltet</div>
-        <div class="info-panel-sub">100-metersgrensen fra sjøen</div>
-      </div>
-      ${tag}
-    </div>
-    <div class="info-panel-body">
-      <p>${inSea
-        ? "Polygonet er i sjøen – hele arealet faller innenfor eller grenser til strandsonebeltet. Plan- og bygningsloven § 1-8 forbyr tiltak i 100-metersbeltet langs sjøen uten dispensasjon."
-        : "Polygonet er innenfor en kystkommune. Sjekk om arealet faller innenfor 100-metersbeltet langs sjøen – i så fall gjelder bygge- og anleggsforbudet i Plan- og bygningsloven § 1-8."
-      }</p>
-      <ul class="info-panel-points">
-        <li>Bygge- og anleggsforbud i 100-metersbeltet</li>
-        <li>Unntak krever dispensasjon fra kommunen</li>
-        <li>Kommunal strandsoneplan kan åpne for tiltak i visse soner</li>
-        <li>Svalbard og enkelte øykommuner har egne regler</li>
-      </ul>
-      <div class="info-panel-links">
-        <a class="info-link" href="https://lovdata.no/lov/2008-06-27-71/§1-8" target="_blank" rel="noopener">PBL § 1-8 – Forbud mot tiltak langs sjø og vassdrag →</a>
-        <a class="info-link" href="https://www.miljodirektoratet.no/ansvarsomrader/arealer/strandsone/" target="_blank" rel="noopener">Miljødirektoratets veiledning om strandsone →</a>
-        <a class="info-link" href="https://lovdata.no/lov/2008-06-27-71/§19-2" target="_blank" rel="noopener">PBL § 19-2 – Dispensasjonsregler →</a>
-        ${kommuneLink}
-      </div>
-    </div>`;
-
-  el.onclick = () => el.classList.toggle("expanded");
+  if (context.isSeaArea) {
+    el.className = "notice-sea";
+    el.innerHTML =
+      `⚓ Sjøareal – innenfor 100-metersbeltet. ` +
+      `<a href="https://lovdata.no/lov/2008-06-27-71/§1-8" target="_blank" rel="noopener">PBL § 1-8</a> gjelder.`;
+  } else {
+    el.className = "notice-land";
+    el.innerHTML =
+      `⚠ Kystkommune – sjekk om arealet er innenfor 100-metersgrensen fra sjøen. ` +
+      `<a href="https://lovdata.no/lov/2008-06-27-71/§1-8" target="_blank" rel="noopener">PBL § 1-8</a>.`;
+  }
 }
 
 // ─── VERKTØYKASSE: HAVBUNNDATA (MAREANO) ────────────────────────────────────
@@ -669,6 +660,9 @@ function clearSelection() {
   document.getElementById("loading-state").classList.add("hidden");
   document.getElementById("empty-state").classList.remove("hidden");
   document.getElementById("area-info").innerHTML = "";
+  const sn = document.getElementById("strandsone-notice");
+  sn.className = "hidden";
+  sn.innerHTML = "";
   document.getElementById("sidebar-title").textContent =
     "Lovverk for kystsonen";
   document.getElementById("status-text").textContent =
