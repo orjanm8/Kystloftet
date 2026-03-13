@@ -73,64 +73,108 @@ document.querySelectorAll('input[name="basemap"]').forEach((radio) => {
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-// DrawControl initialiserer polygon-handler korrekt internt
-const drawControl = new L.Control.Draw({
-  edit: { featureGroup: drawnItems, edit: false, remove: false },
-  draw: {
-    polygon: {
-      allowIntersection: false,
-      showArea: true,
-      shapeOptions: {
-        color: "#0369a1",
-        fillColor: "#0ea5e9",
-        fillOpacity: 0.25,
-        weight: 2,
-      },
-    },
-    circle: false,
-    rectangle: false,
-    polyline: false,
-    marker: false,
-    circlemarker: false,
-  },
-});
-drawControl.addTo(map);
+// ─── POLYGON-TEGNING (egenimplementert) ──────────────────────────────────────
 
-// Skjul Leaflet.draw sin standardtoolbar – vi bruker egne knapper
-const lwToolbar = document.querySelector(".leaflet-draw");
-if (lwToolbar) lwToolbar.style.display = "none";
-
-// ─── POLYGON-TEGNING ──────────────────────────────────────────────────────────
+const POLYGON_STYLE = {
+  color: "#0369a1",
+  fillColor: "#0ea5e9",
+  fillOpacity: 0.25,
+  weight: 2,
+};
 
 let drawingActive = false;
+let drawPoints = [];
+let drawPolyline = null;
+let drawPreviewLine = null;
 
 function startPolygon() {
-  const handler = drawControl._toolbars.draw._modes.polygon.handler;
   if (drawingActive) {
-    handler.disable();
-    drawingActive = false;
-    document.getElementById("btn-polygon").classList.remove("active");
-  } else {
-    handler.enable();
-    drawingActive = true;
-    document.getElementById("btn-polygon").classList.add("active");
+    cancelDrawing();
+    return;
   }
+  drawingActive = true;
+  drawPoints = [];
+  document.getElementById("btn-polygon").classList.add("active");
+  document.getElementById("status-text").textContent =
+    "Klikk for å legge til punkter – dobbeltklikk for å fullføre";
+  map.getContainer().style.cursor = "crosshair";
+  map.doubleClickZoom.disable();
+  map.on("click", onMapClick);
+  map.on("dblclick", onMapDblClick);
+  map.on("mousemove", onMapMouseMove);
+}
+
+function onMapClick(e) {
+  drawPoints.push(e.latlng);
+  if (drawPolyline) {
+    drawPolyline.setLatLngs(drawPoints);
+  } else {
+    drawPolyline = L.polyline(drawPoints, { color: "#0369a1", weight: 2 }).addTo(map);
+  }
+}
+
+function onMapMouseMove(e) {
+  if (drawPoints.length === 0) return;
+  const preview = [...drawPoints, e.latlng];
+  if (drawPreviewLine) {
+    drawPreviewLine.setLatLngs(preview);
+  } else {
+    drawPreviewLine = L.polyline(preview, {
+      color: "#0369a1",
+      weight: 1,
+      dashArray: "6,6",
+      opacity: 0.5,
+    }).addTo(map);
+  }
+}
+
+function onMapDblClick() {
+  // Dobbelt-klikk fyrer to click-events først – fjern det siste
+  if (drawPoints.length > 0) drawPoints.pop();
+  if (drawPoints.length < 3) {
+    cancelDrawing();
+    return;
+  }
+  finishDrawing();
+}
+
+function stopDrawListeners() {
+  map.off("click", onMapClick);
+  map.off("dblclick", onMapDblClick);
+  map.off("mousemove", onMapMouseMove);
+  map.getContainer().style.cursor = "";
+  map.doubleClickZoom.enable();
+}
+
+function finishDrawing() {
+  stopDrawListeners();
+  if (drawPolyline) { map.removeLayer(drawPolyline); drawPolyline = null; }
+  if (drawPreviewLine) { map.removeLayer(drawPreviewLine); drawPreviewLine = null; }
+
+  const polygon = L.polygon(drawPoints, POLYGON_STYLE);
+  drawnItems.clearLayers();
+  drawnItems.addLayer(polygon);
+
+  drawingActive = false;
+  drawPoints = [];
+  document.getElementById("btn-polygon").classList.remove("active");
+
+  handleAreaSelected(polygon, "polygon");
+}
+
+function cancelDrawing() {
+  stopDrawListeners();
+  if (drawPolyline) { map.removeLayer(drawPolyline); drawPolyline = null; }
+  if (drawPreviewLine) { map.removeLayer(drawPreviewLine); drawPreviewLine = null; }
+  drawingActive = false;
+  drawPoints = [];
+  document.getElementById("btn-polygon").classList.remove("active");
+  document.getElementById("status-text").textContent =
+    "Tegn et område i kartet for å søke";
 }
 
 document.getElementById("btn-polygon").addEventListener("click", startPolygon);
 document.getElementById("btn-clear").addEventListener("click", clearSelection);
-
-// ─── TEGNING FULLFØRES ───────────────────────────────────────────────────────
-
-map.on(L.Draw.Event.CREATED, (e) => {
-  drawnItems.clearLayers();
-  drawnItems.addLayer(e.layer);
-
-  drawingActive = false;
-  document.getElementById("btn-polygon").classList.remove("active");
-
-  handleAreaSelected(e.layer, e.layerType);
-});
 
 // ─── HÅNDTER VALGT OMRÅDE ────────────────────────────────────────────────────
 
@@ -142,11 +186,7 @@ async function handleAreaSelected(layer, layerType) {
   let radiusKm = null;
 
   try {
-    if (layerType === "circle") {
-      const center = layer.getLatLng();
-      centroid = center;
-      radiusKm = (layer.getRadius() / 1000).toFixed(1);
-    } else {
+    {
       // Polygon – bruk Turf.js for tyngdepunkt og areal
       const geojson = layer.toGeoJSON();
       const turfCentroid = turf.centroid(geojson);
@@ -399,11 +439,7 @@ function clearSelection() {
   document.getElementById("status-text").textContent =
     "Tegn et område i kartet for å søke";
 
-  if (drawingActive) {
-    drawControl._toolbars.draw._modes.polygon.handler.disable();
-    drawingActive = false;
-  }
-  document.getElementById("btn-polygon").classList.remove("active");
+  if (drawingActive) cancelDrawing();
 }
 
 // ─── VELKOMST: Zoom til Norskekysten ────────────────────────────────────────
