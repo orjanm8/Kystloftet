@@ -73,57 +73,51 @@ document.querySelectorAll('input[name="basemap"]').forEach((radio) => {
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-const SHAPE_STYLE = {
-  color: "#0369a1",
-  fillColor: "#0ea5e9",
-  fillOpacity: 0.25,
-  weight: 2,
-};
-
-// Opprett handlers direkte – ingen DrawControl nødvendig
-const polygonHandler = new L.Draw.Polygon(map, {
-  allowIntersection: false,
-  showArea: true,
-  shapeOptions: SHAPE_STYLE,
+// DrawControl initialiserer polygon-handler korrekt internt
+const drawControl = new L.Control.Draw({
+  edit: { featureGroup: drawnItems, edit: false, remove: false },
+  draw: {
+    polygon: {
+      allowIntersection: false,
+      showArea: true,
+      shapeOptions: {
+        color: "#0369a1",
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.25,
+        weight: 2,
+      },
+    },
+    circle: false,
+    rectangle: false,
+    polyline: false,
+    marker: false,
+    circlemarker: false,
+  },
 });
+drawControl.addTo(map);
 
-const circleHandler = new L.Draw.Circle(map, {
-  shapeOptions: SHAPE_STYLE,
-  showRadius: true,
-  metric: true,
-});
+// Skjul Leaflet.draw sin standardtoolbar – vi bruker egne knapper
+const lwToolbar = document.querySelector(".leaflet-draw");
+if (lwToolbar) lwToolbar.style.display = "none";
 
-// ─── AKTIV TEGNE-HANDLER ─────────────────────────────────────────────────────
+// ─── POLYGON-TEGNING ──────────────────────────────────────────────────────────
 
-let activeDrawHandler = null;
+let drawingActive = false;
 
-function startDraw(type) {
-  if (activeDrawHandler) {
-    activeDrawHandler.disable();
-    activeDrawHandler = null;
-  }
-
-  document.querySelectorAll(".tool-btn").forEach((b) =>
-    b.classList.remove("active")
-  );
-
-  if (type === "polygon") {
-    activeDrawHandler = polygonHandler;
+function startPolygon() {
+  const handler = drawControl._toolbars.draw._modes.polygon.handler;
+  if (drawingActive) {
+    handler.disable();
+    drawingActive = false;
+    document.getElementById("btn-polygon").classList.remove("active");
+  } else {
+    handler.enable();
+    drawingActive = true;
     document.getElementById("btn-polygon").classList.add("active");
-  } else if (type === "circle") {
-    activeDrawHandler = circleHandler;
-    document.getElementById("btn-circle").classList.add("active");
   }
-
-  if (activeDrawHandler) activeDrawHandler.enable();
 }
 
-document.getElementById("btn-polygon").addEventListener("click", () =>
-  startDraw("polygon")
-);
-document.getElementById("btn-circle").addEventListener("click", () =>
-  startDraw("circle")
-);
+document.getElementById("btn-polygon").addEventListener("click", startPolygon);
 document.getElementById("btn-clear").addEventListener("click", clearSelection);
 
 // ─── TEGNING FULLFØRES ───────────────────────────────────────────────────────
@@ -132,10 +126,8 @@ map.on(L.Draw.Event.CREATED, (e) => {
   drawnItems.clearLayers();
   drawnItems.addLayer(e.layer);
 
-  activeDrawHandler = null;
-  document.querySelectorAll(".tool-btn").forEach((b) =>
-    b.classList.remove("active")
-  );
+  drawingActive = false;
+  document.getElementById("btn-polygon").classList.remove("active");
 
   handleAreaSelected(e.layer, e.layerType);
 });
@@ -407,13 +399,11 @@ function clearSelection() {
   document.getElementById("status-text").textContent =
     "Tegn et område i kartet for å søke";
 
-  if (activeDrawHandler) {
-    activeDrawHandler.disable();
-    activeDrawHandler = null;
+  if (drawingActive) {
+    drawControl._toolbars.draw._modes.polygon.handler.disable();
+    drawingActive = false;
   }
-  document.querySelectorAll(".tool-btn").forEach((b) =>
-    b.classList.remove("active")
-  );
+  document.getElementById("btn-polygon").classList.remove("active");
 }
 
 // ─── VELKOMST: Zoom til Norskekysten ────────────────────────────────────────
