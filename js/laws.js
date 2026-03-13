@@ -294,14 +294,17 @@ function filterLaws(context, filterTopic = "all") {
     // Svalbard-spesifikke lover vises kun ved Svalbard
     if (law.region === "svalbard" && !context.isSvalbard) return false;
 
-    // Geografisk relevans – differensier mellom sjøareal og landaReal
+    // Tre-trinns geografisk filtrering:
+    //   sjøareal  → alle maritime/kyst/nasjonale lover (~14 stk)
+    //   kystland  → kyst- og nasjonale lover, men ikke dyphavs-/offshorelover (~10 stk)
+    //   innland   → kun nasjonale lover (4 stk) – ikke aktuelt for Arendal-pilot
     let geoMatch;
     if (context.isSeaArea) {
-      // I sjøen: vis alle lover merket seaZone, coastal eller national
       geoMatch = law.national || law.seaZone || law.coastal;
+    } else if (context.isCoastal) {
+      geoMatch = law.national || law.coastal;
     } else {
-      // På land: vis kun nasjonale lover + kystlover som IKKE krever sjøtilgang
-      geoMatch = law.national || (law.coastal && !law.seaZone);
+      geoMatch = law.national;
     }
 
     if (!geoMatch) return false;

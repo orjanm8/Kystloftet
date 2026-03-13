@@ -248,6 +248,28 @@ html, body {
 
 #search-btn:hover { background: var(--blue-800); }
 
+.search-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--grey-300);
+  flex-shrink: 0;
+}
+
+#btn-locate {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--grey-500);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color .15s;
+}
+
+#btn-locate:hover { color: var(--blue-600); }
+
 #search-results {
   margin-top: 4px;
   background: #fff;
