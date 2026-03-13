@@ -34,8 +34,8 @@ const NORWAY_BBOX = {
 // ─── KART INITIALISERING ─────────────────────────────────────────────────────
 
 const map = L.map("map", {
-  center: [64.5, 14.5], // Midt-Norge / kysten
-  zoom: 5,
+  center: [58.461, 8.766], // Arendal – pilotkommune
+  zoom: 12,
   zoomControl: true,
 });
 
