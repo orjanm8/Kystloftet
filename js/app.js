@@ -68,6 +68,142 @@ document.querySelectorAll('input[name="basemap"]').forEach((radio) => {
   });
 });
 
+// ─── OVERLAY-KARTLAG ──────────────────────────────────────────────────────────
+
+// Dybdekonturer – Kartverket sjøkart WMS (transparent overlay)
+const depthLayer = L.tileLayer.wms(
+  "https://openwms.statkart.no/skwms1/wms.sjokartraster2",
+  {
+    layers: "sjokartraster",
+    format: "image/png",
+    transparent: true,
+    opacity: 0.6,
+    attribution: ATTRIBUTION_KARTVERKET,
+  }
+);
+
+// Verneområder – Miljødirektoratet WMS
+const vernLayer = L.tileLayer.wms(
+  "https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer",
+  {
+    layers: "0",
+    format: "image/png",
+    transparent: true,
+    opacity: 0.55,
+    attribution:
+      '&copy; <a href="https://www.miljodirektoratet.no">Miljødirektoratet</a>',
+  }
+);
+
+// Havner og kaier – lastes fra Overpass API (OpenStreetMap) ved aktivering
+const harborGroup = L.layerGroup();
+let harborsLoaded = false;
+
+async function loadHarbors() {
+  if (harborsLoaded) return;
+  harborsLoaded = true;
+  try {
+    const query = `[out:json][timeout:30];(node["harbour"](57,4,72,32);node["seamark:type"="harbour"](57,4,72,32););out body;`;
+    const res = await fetch(
+      `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`
+    );
+    const data = await res.json();
+    data.elements.forEach((node) => {
+      const name = node.tags.name || node.tags["name:no"] || "Havn";
+      L.circleMarker([node.lat, node.lon], {
+        radius: 6,
+        color: "#1e3a5f",
+        fillColor: "#2563eb",
+        fillOpacity: 0.85,
+        weight: 1.5,
+      })
+        .bindTooltip(name, { direction: "top", offset: [0, -6] })
+        .bindPopup(`<strong>${name}</strong>`)
+        .addTo(harborGroup);
+    });
+  } catch (err) {
+    console.error("Kunne ikke laste havnedata:", err);
+    harborsLoaded = false;
+  }
+}
+
+document.getElementById("toggle-depth").addEventListener("change", (e) => {
+  if (e.target.checked) depthLayer.addTo(map);
+  else map.removeLayer(depthLayer);
+});
+
+document.getElementById("toggle-vern").addEventListener("change", (e) => {
+  if (e.target.checked) vernLayer.addTo(map);
+  else map.removeLayer(vernLayer);
+});
+
+document.getElementById("toggle-harbors").addEventListener("change", async (e) => {
+  if (e.target.checked) {
+    await loadHarbors();
+    harborGroup.addTo(map);
+  } else {
+    map.removeLayer(harborGroup);
+  }
+});
+
+// ─── SØKEFELT (Nominatim) ────────────────────────────────────────────────────
+
+let searchMarker = null;
+
+async function doSearch() {
+  const q = document.getElementById("search-input").value.trim();
+  if (!q) return;
+  const url =
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}` +
+    `&format=json&countrycodes=no&limit=5&accept-language=no`;
+  try {
+    const res = await fetch(url, { headers: { "Accept-Language": "no,en" } });
+    const hits = await res.json();
+    renderSearchResults(hits);
+  } catch (err) {
+    console.error("Søkefeil:", err);
+  }
+}
+
+function renderSearchResults(hits) {
+  const box = document.getElementById("search-results");
+  if (!hits.length) {
+    box.innerHTML = `<div class="search-no-result">Ingen treff for dette søket</div>`;
+    box.classList.remove("hidden");
+    return;
+  }
+  box.innerHTML = hits
+    .map((h, i) => {
+      const label = h.display_name.split(",").slice(0, 2).join(", ");
+      return `<div class="search-result-item" data-i="${i}">${label}</div>`;
+    })
+    .join("");
+  box.classList.remove("hidden");
+  box.querySelectorAll(".search-result-item").forEach((el, i) => {
+    el.addEventListener("click", () => {
+      const h = hits[i];
+      if (searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker([+h.lat, +h.lon])
+        .bindPopup(h.display_name.split(",").slice(0, 3).join(", "))
+        .addTo(map)
+        .openPopup();
+      map.flyTo([+h.lat, +h.lon], 14, { duration: 1.2 });
+      document.getElementById("search-input").value = h.display_name.split(",")[0];
+      box.classList.add("hidden");
+    });
+  });
+}
+
+document.getElementById("search-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doSearch();
+  if (e.key === "Escape") document.getElementById("search-results").classList.add("hidden");
+});
+document.getElementById("search-btn").addEventListener("click", doSearch);
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#search-container"))
+    document.getElementById("search-results").classList.add("hidden");
+});
+
 // ─── TEGNELAG OG KONTROLLER ──────────────────────────────────────────────────
 
 const drawnItems = new L.FeatureGroup();
