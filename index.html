@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kystloftet – Kart og Lovverk</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet Draw -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.css" />
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- HEADER -->
+    <header id="header">
+      <div class="header-left">
+        <div class="logo-mark">⚓</div>
+        <div>
+          <div class="logo-name">Kystloftet</div>
+          <div class="logo-sub">Kystsone · Kart og Lovverk</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="status-text">Tegn et område i kartet for å søke</span>
+      </div>
+    </header>
+
+    <!-- MAIN LAYOUT -->
+    <div id="main">
+
+      <!-- MAP PANEL -->
+      <div id="map-panel">
+        <div id="map"></div>
+
+        <!-- TOOL BAR overlaid on map -->
+        <div id="toolbar">
+          <button id="btn-polygon" class="tool-btn" title="Tegn polygon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12,2 22,20 2,20"/>
+            </svg>
+            Polygon
+          </button>
+          <button id="btn-circle" class="tool-btn" title="Tegn sirkel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+            Sirkelradius
+          </button>
+          <div class="toolbar-sep"></div>
+          <button id="btn-clear" class="tool-btn tool-btn-danger" title="Fjern markering">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            Fjern
+          </button>
+        </div>
+
+        <!-- MAP LAYERS control -->
+        <div id="layer-control">
+          <label class="layer-opt">
+            <input type="radio" name="basemap" value="topo" checked /> Topografisk
+          </label>
+          <label class="layer-opt">
+            <input type="radio" name="basemap" value="grey" /> Gråtone
+          </label>
+          <label class="layer-opt">
+            <input type="radio" name="basemap" value="osm" /> OpenStreetMap
+          </label>
+        </div>
+      </div>
+
+      <!-- SIDEBAR -->
+      <aside id="sidebar">
+
+        <div id="sidebar-header">
+          <h2 id="sidebar-title">Lovverk for kystsonen</h2>
+          <div id="area-info"></div>
+        </div>
+
+        <!-- EMPTY STATE -->
+        <div id="empty-state">
+          <div class="empty-icon">🗺️</div>
+          <p>Bruk verktøyene øverst i kartet til å markere et område.</p>
+          <p class="empty-hint">Velg <strong>Polygon</strong> for å tegne et frihåndsomriss, eller <strong>Sirkelradius</strong> for å søke innen en gitt avstand.</p>
+        </div>
+
+        <!-- LOADING STATE -->
+        <div id="loading-state" class="hidden">
+          <div class="spinner"></div>
+          <p>Henter informasjon om valgt område…</p>
+        </div>
+
+        <!-- RESULTS -->
+        <div id="results" class="hidden">
+          <div id="filter-bar">
+            <span class="filter-label">Filter:</span>
+            <button class="filter-btn active" data-filter="all">Alle</button>
+            <button class="filter-btn" data-filter="havbruk">Havbruk</button>
+            <button class="filter-btn" data-filter="fiskeri">Fiskeri</button>
+            <button class="filter-btn" data-filter="miljoe">Miljø</button>
+            <button class="filter-btn" data-filter="planlegging">Planlegging</button>
+            <button class="filter-btn" data-filter="energi">Energi</button>
+          </div>
+          <div id="results-list"></div>
+        </div>
+
+      </aside>
+
+    </div><!-- /main -->
+
+  </div><!-- /app -->
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="js/laws.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
