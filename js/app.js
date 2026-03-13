@@ -262,9 +262,7 @@ function displayResults(context, geoInfo, meta) {
   const areaInfo = document.getElementById("area-info");
   const parts = [];
 
-  if (meta.layerType === "circle" && meta.radiusKm) {
-    parts.push(`Sirkelradius: ${meta.radiusKm} km`);
-  } else if (meta.areaKm2) {
+  if (meta.areaKm2) {
     parts.push(`Areal: ${meta.areaKm2} km²`);
   }
 
@@ -285,6 +283,8 @@ function displayResults(context, geoInfo, meta) {
       : "Lovverk – Sjøareal";
 
   renderLawList(context, currentFilter);
+  renderStrandsonePanel(context);
+  renderMAREANOPanel(context);
   showResults();
 }
 
@@ -388,6 +388,90 @@ function topicBadgeName(t) {
     energi: "Energi",
   };
   return names[t] || t;
+}
+
+// ─── VERKTØYKASSE: STRANDSONEBELTET ─────────────────────────────────────────
+
+function renderStrandsonePanel(context) {
+  const el = document.getElementById("panel-strandsone");
+  const inSea = context.isSeaArea;
+  const tag = inSea
+    ? `<span class="info-panel-tag tag-sea">I sjøen</span>`
+    : `<span class="info-panel-tag tag-land">Kystkommune</span>`;
+
+  const kommuneLink = context.kommunenavn
+    ? `<a class="info-link" href="https://www.google.com/search?q=${encodeURIComponent(context.kommunenavn + " kommune strandsoneplan")}" target="_blank" rel="noopener">Søk etter ${context.kommunenavn} kommunes strandsoneplan →</a>`
+    : "";
+
+  el.innerHTML = `
+    <div class="info-panel-hdr">
+      <div class="info-panel-icon">🏖️</div>
+      <div class="info-panel-meta">
+        <div class="info-panel-title">Strandsonebeltet</div>
+        <div class="info-panel-sub">100-metersgrensen fra sjøen</div>
+      </div>
+      ${tag}
+    </div>
+    <div class="info-panel-body">
+      <p>${inSea
+        ? "Polygonet er i sjøen – hele arealet faller innenfor eller grenser til strandsonebeltet. Plan- og bygningsloven § 1-8 forbyr tiltak i 100-metersbeltet langs sjøen uten dispensasjon."
+        : "Polygonet er innenfor en kystkommune. Sjekk om arealet faller innenfor 100-metersbeltet langs sjøen – i så fall gjelder bygge- og anleggsforbudet i Plan- og bygningsloven § 1-8."
+      }</p>
+      <ul class="info-panel-points">
+        <li>Bygge- og anleggsforbud i 100-metersbeltet</li>
+        <li>Unntak krever dispensasjon fra kommunen</li>
+        <li>Kommunal strandsoneplan kan åpne for tiltak i visse soner</li>
+        <li>Svalbard og enkelte øykommuner har egne regler</li>
+      </ul>
+      <div class="info-panel-links">
+        <a class="info-link" href="https://lovdata.no/lov/2008-06-27-71/§1-8" target="_blank" rel="noopener">PBL § 1-8 – Forbud mot tiltak langs sjø og vassdrag →</a>
+        <a class="info-link" href="https://www.miljodirektoratet.no/ansvarsomrader/arealer/strandsone/" target="_blank" rel="noopener">Miljødirektoratets veiledning om strandsone →</a>
+        <a class="info-link" href="https://lovdata.no/lov/2008-06-27-71/§19-2" target="_blank" rel="noopener">PBL § 19-2 – Dispensasjonsregler →</a>
+        ${kommuneLink}
+      </div>
+    </div>`;
+
+  el.onclick = () => el.classList.toggle("expanded");
+}
+
+// ─── VERKTØYKASSE: HAVBUNNDATA (MAREANO) ────────────────────────────────────
+
+function renderMAREANOPanel(context) {
+  const el = document.getElementById("panel-mareano");
+  const lat = context.lat ? context.lat.toFixed(4) : "";
+  const lon = context.lon ? context.lon.toFixed(4) : "";
+
+  const coordNote = lat
+    ? `<li>Koordinater for valgt område: <strong>${lat}°N, ${lon}°Ø</strong></li>`
+    : "";
+
+  el.innerHTML = `
+    <div class="info-panel-hdr">
+      <div class="info-panel-icon">🔬</div>
+      <div class="info-panel-meta">
+        <div class="info-panel-title">Havbunndata – MAREANO</div>
+        <div class="info-panel-sub">Bunntype, sedimenter og dybde</div>
+      </div>
+      <span class="info-panel-tag tag-data">Kartdata</span>
+    </div>
+    <div class="info-panel-body">
+      <p>MAREANO kartlegger havbunnen i norske farvann med hensyn til geologi, biologi og kjemi. Data fra Skagerrak og Sørlandskysten er tilgjengelig og dekker Arendal-området.</p>
+      <ul class="info-panel-points">
+        ${coordNote}
+        <li>Bunntype: grus, sand, silt eller leire</li>
+        <li>Havbunnsedimenter fra NGU (Norges geologiske undersøkelse)</li>
+        <li>Biologiske habitatkart tilgjengelig for deler av kysten</li>
+        <li>Dybdedata fra Kartverkets sjøkart</li>
+      </ul>
+      <div class="info-panel-links">
+        <a class="info-link" href="https://www.mareano.no/" target="_blank" rel="noopener">MAREANO – Havbunnskartlegging →</a>
+        <a class="info-link" href="https://www.ngu.no/geologiske-undersokelser/hav-og-sjobunngeologi/havbunnsedimenter" target="_blank" rel="noopener">NGU – Havbunnsedimenter →</a>
+        <a class="info-link" href="https://kartkatalog.geonorge.no/search?text=MAREANO" target="_blank" rel="noopener">Geonorge – MAREANO-datasett →</a>
+        <a class="info-link" href="https://www.kartverket.no/til-sjos/nautiske-publikasjoner/dybdedata" target="_blank" rel="noopener">Kartverket – Dybdedata →</a>
+      </div>
+    </div>`;
+
+  el.onclick = () => el.classList.toggle("expanded");
 }
 
 // ─── FILTER-KNAPPER ──────────────────────────────────────────────────────────
