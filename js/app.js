@@ -73,39 +73,25 @@ document.querySelectorAll('input[name="basemap"]').forEach((radio) => {
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
-const drawControl = new L.Control.Draw({
-  edit: { featureGroup: drawnItems, edit: false, remove: false },
-  draw: {
-    polygon: {
-      allowIntersection: false,
-      showArea: true,
-      shapeOptions: {
-        color: "#0369a1",
-        fillColor: "#0ea5e9",
-        fillOpacity: 0.25,
-        weight: 2,
-      },
-    },
-    circle: {
-      shapeOptions: {
-        color: "#0369a1",
-        fillColor: "#0ea5e9",
-        fillOpacity: 0.25,
-        weight: 2,
-      },
-      showRadius: true,
-      metric: true,
-    },
-    rectangle: false,
-    polyline: false,
-    marker: false,
-    circlemarker: false,
-  },
+const SHAPE_STYLE = {
+  color: "#0369a1",
+  fillColor: "#0ea5e9",
+  fillOpacity: 0.25,
+  weight: 2,
+};
+
+// Opprett handlers direkte – ingen DrawControl nødvendig
+const polygonHandler = new L.Draw.Polygon(map, {
+  allowIntersection: false,
+  showArea: true,
+  shapeOptions: SHAPE_STYLE,
 });
 
-// Skjul standard Leaflet.draw toolbar (vi bruker egne knapper)
-drawControl.addTo(map);
-document.querySelector(".leaflet-draw").style.display = "none";
+const circleHandler = new L.Draw.Circle(map, {
+  shapeOptions: SHAPE_STYLE,
+  showRadius: true,
+  metric: true,
+});
 
 // ─── AKTIV TEGNE-HANDLER ─────────────────────────────────────────────────────
 
@@ -122,10 +108,10 @@ function startDraw(type) {
   );
 
   if (type === "polygon") {
-    activeDrawHandler = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
+    activeDrawHandler = polygonHandler;
     document.getElementById("btn-polygon").classList.add("active");
   } else if (type === "circle") {
-    activeDrawHandler = new L.Draw.Circle(map, drawControl.options.draw.circle);
+    activeDrawHandler = circleHandler;
     document.getElementById("btn-circle").classList.add("active");
   }
 
