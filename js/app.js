@@ -16,17 +16,15 @@ const KARTVERKET_GREY =
 const ATTRIBUTION_KARTVERKET =
   '&copy; <a href="https://kartverket.no">Kartverket</a>';
 
-// Geonorge kommuneinfo API – finner kommune fra koordinat
+// Geonorge kommuneinfo – returnerer kommunenavn/-nummer (NB: returnerer data
+// selv for sjøpunkter innenfor kommunegrensen, brukes KUN til kommunenavn)
 const GEONORGE_PUNKT_URL =
   "https://ws.geonorge.no/kommuneinfo/v1/punkt?koordsys=4326&nord={lat}&ost={lon}";
 
-// Norges grunnlinje (ca. bounding box) – brukes til enkel sjø-deteksjon
-const NORWAY_BBOX = {
-  minLat: 57.5,
-  maxLat: 81.0,
-  minLon: 4.0,
-  maxLon: 31.5,
-};
+// Nominatim reverse geocoding – brukes til å skille sjø fra land
+// (Geonorge er uegnet fordi norske kommuner inkluderer sjøarealer)
+const NOMINATIM_REVERSE_URL =
+  "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=16";
 
 // ─── KART INITIALISERING ─────────────────────────────────────────────────────
 
@@ -321,60 +319,92 @@ async function handleAreaSelected(layer, layerType) {
     };
     areaKm2 = (turf.area(geojson) / 1_000_000).toFixed(2);
 
-    // Sjekk sentroid + opp til 4 hjørnepunkter parallelt for å detektere
-    // om polygonet strekker seg ut i sjøen (ingen kommunetreff = sjø)
+    // Samle opptil 4 representativt fordelte hjørnepunkter
     const pts = layer.getLatLngs()[0];
     const step = Math.max(1, Math.floor(pts.length / 4));
     const corners = pts.filter((_, i) => i % step === 0).slice(0, 4);
 
-    const [geoInfo, ...cornerInfos] = await Promise.all([
+    // Kjør Geonorge (kommunenavn) og Nominatim (sjø/land) parallelt.
+    // Nominatim-sjekk på sentroid + hjørner gir pålitelig sjø/land-skille
+    // fordi den bruker faktisk terrengdata, ikke administrative grenser.
+    const [geoInfo, centroidIsSea, ...cornerSeaFlags] = await Promise.all([
       fetchGeonorgeInfo(centroid.lat, centroid.lng),
-      ...corners.map((p) => fetchGeonorgeInfo(p.lat, p.lng)),
+      checkIsSeaPoint(centroid.lat, centroid.lng),
+      ...corners.map((p) => checkIsSeaPoint(p.lat, p.lng)),
     ]);
 
-    // En hjørne-null betyr at dette hjørnet er i sjøen
-    const cornersInSea = cornerInfos.some((r) => r === null);
-    const context = buildContext(centroid, geoInfo, cornersInSea);
+    const isSeaArea = centroidIsSea;
+    const cornersInSea = cornerSeaFlags.some(Boolean);
+    const context = buildContext(centroid, geoInfo, isSeaArea, cornersInSea);
 
     displayResults(context, geoInfo, { areaKm2, layerType });
   } catch (err) {
     console.error("Feil ved henting av geoinformasjon:", err);
-    const context = buildContext(centroid, null, false);
+    const context = buildContext(centroid, null, false, false);
     displayResults(context, null, { areaKm2, layerType });
   }
 }
 
-// ─── GEONORGE API ───────────────────────────────────────────────────────────
+// ─── GEO-API-LAG ────────────────────────────────────────────────────────────
 
+// Henter kommunenavn/-nummer fra Geonorge (returnerer alltid data innenfor
+// kommunegrensen – også for sjøpunkter, brukes KUN til kommunenavn)
 async function fetchGeonorgeInfo(lat, lon) {
-  const url = GEONORGE_PUNKT_URL.replace("{lat}", lat).replace("{lon}", lon);
-  const response = await fetch(url);
-  if (!response.ok) return null; // Punkt er i sjøen eller utenfor Norge
-  return response.json();
+  try {
+    const url = GEONORGE_PUNKT_URL.replace("{lat}", lat).replace("{lon}", lon);
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return response.json();
+  } catch (_) { return null; }
+}
+
+// Sjekker om et punkt er i sjøen via Nominatim reverse geocoding.
+// Nominatim bruker OpenStreetMap-data og returnerer den faktiske terrengtypen
+// (water, harbour, bay, osv.) – ikke administrative grenser som Geonorge.
+async function checkIsSeaPoint(lat, lon) {
+  try {
+    const url = NOMINATIM_REVERSE_URL.replace("{lat}", lat).replace("{lon}", lon);
+    const res = await fetch(url, { headers: { "Accept-Language": "no,en" } });
+    const data = await res.json();
+    if (!data || data.error) return true; // Ingen treff = åpent hav
+
+    const addr = data.address || {};
+    const t = (data.addresstype || "").toLowerCase();
+
+    // Klare vann-indikatorer i OSM-data
+    if (["sea", "bay", "harbour", "water", "ocean", "strait", "fjord",
+         "cove", "inlet", "lake", "river"].includes(t)) return true;
+    if (addr.body_of_water || addr.sea || addr.bay || addr.harbour ||
+        addr.ocean || addr.fjord || addr.lake || addr.river) return true;
+
+    // Klare land-indikatorer
+    if (addr.road || addr.pedestrian || addr.cycleway || addr.footway ||
+        addr.house_number || addr.building || addr.amenity ||
+        addr.suburb || addr.neighbourhood || addr.residential) return false;
+
+    // Tettssted uten veg → sannsynligvis land
+    if (addr.city || addr.town || addr.village || addr.hamlet) return false;
+
+    // Kun fylke/land = uavgjort, antar sjø nær kysten
+    return !addr.municipality;
+  } catch (_) { return false; }
 }
 
 // ─── BYGG KONTEKST FOR LOVFILTRERING ────────────────────────────────────────
 
-function buildContext(centroid, geoInfo, cornersInSea = false) {
+function buildContext(centroid, geoInfo, isSeaArea = false, cornersInSea = false) {
   const context = {
-    isSeaArea: !geoInfo,
-    // isCoastal=true for alle polygon i Arendal-piloten (kystkommune);
-    // settes også true hvis et hjørne er i sjøen selv om sentroid er på land
-    isCoastal: true,
-    cornersInSea: cornersInSea || !geoInfo,
+    isSeaArea,                           // Basert på Nominatim terrengdata
+    isCoastal: true,                     // Alltid sant for Arendal-piloten
+    cornersInSea: cornersInSea || isSeaArea,
     isSvalbard: false,
-    kommunenavn: null,
-    fylkesnavn: null,
-    lat: centroid ? centroid.lat : null,
-    lon: centroid ? centroid.lng : null,
+    kommunenavn: geoInfo?.kommunenavn ?? null,
+    fylkesnavn: geoInfo?.fylkesnavn ?? null,
+    lat: centroid?.lat ?? null,
+    lon: centroid?.lng ?? null,
   };
 
-  if (geoInfo) {
-    context.kommunenavn = geoInfo.kommunenavn;
-    context.fylkesnavn = geoInfo.fylkesnavn;
-    const knr = geoInfo.kommunenummer || "";
-    if (knr.startsWith("21")) context.isSvalbard = true;
-  }
+  if (geoInfo?.kommunenummer?.startsWith("21")) context.isSvalbard = true;
 
   return context;
 }
@@ -561,28 +591,34 @@ function renderStrandsoneNotice(context) {
 
 function renderArendalPanel(context) {
   const el = document.getElementById("panel-arendal");
+  const isSea = context.isSeaArea || context.cornersInSea;
 
-  const seaLinks = context.isSeaArea || context.cornersInSea ? `
-    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/" target="_blank" rel="noopener">Kommuneplanens arealdel – sjøarealdelen →</a>
-    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/ny-kommuneplan-revisjon-av-kommuneplanens-arealdel/" target="_blank" rel="noopener">Revisjon av kommuneplanens arealdel →</a>` : `
-    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/" target="_blank" rel="noopener">Kommuneplanens arealdel →</a>
-    <a class="info-link" href="https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/eiendomsinformasjon-og-kart/" target="_blank" rel="noopener">Eiendomsinformasjon og kart →</a>`;
+  // Kontekstsensitive lenker: sjøareal viser sjørelaterte dokumenter
+  const contextLinks = isSea ? `
+    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/" target="_blank" rel="noopener">Kommuneplanens arealdel 2023–2033 (sjøareal) →</a>
+    <a class="info-link" href="https://www.arendal.kommune.no/_f/p1/i5917f255-7513-4b25-97a8-34659f731ff4/vedlegg-2-kommuneplanbestemmelser-januar-2023-27012023.pdf" target="_blank" rel="noopener">Kommuneplanbestemmelser 2023–2033 (PDF) →</a>
+    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-organisasjon/kommuneplan-planer-og-styringsdokumenter/kommunedelplaner/smabathavner/" target="_blank" rel="noopener">Kommunedelplan for småbåthavner →</a>
+    <a class="info-link" href="https://www.arendal.kommune.no/_f/p1/iac3d68a9-5dc5-41d8-83b8-833dd001c559/Kommunedelplan_smaabaathavner_2010-2020.pdf" target="_blank" rel="noopener">Kommunedelplan småbåthavner (PDF) →</a>` : `
+    <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/" target="_blank" rel="noopener">Kommuneplanens arealdel 2023–2033 →</a>
+    <a class="info-link" href="https://www.arendal.kommune.no/_f/p1/i5917f255-7513-4b25-97a8-34659f731ff4/vedlegg-2-kommuneplanbestemmelser-januar-2023-27012023.pdf" target="_blank" rel="noopener">Kommuneplanbestemmelser 2023–2033 (PDF) →</a>
+    <a class="info-link" href="https://karttjenester.ikt-agder.no/planinnsyn_arendal/" target="_blank" rel="noopener">Planinnsyn – finn reguleringsplan for dette området →</a>`;
 
   el.innerHTML = `
     <div class="info-panel-hdr">
       <div class="info-panel-icon">📋</div>
       <div class="info-panel-meta">
-        <div class="info-panel-title">Arendal kommune – plandokumenter</div>
-        <div class="info-panel-sub">Kommuneplan, reguleringsplaner og kart</div>
+        <div class="info-panel-title">Arendal – plandokumenter</div>
+        <div class="info-panel-sub">${isSea ? "Sjøareal og havneplan" : "Arealplan og regulering"}</div>
       </div>
       <span class="info-panel-tag tag-land">Arendal</span>
     </div>
     <div class="info-panel-body">
-      <p>Relevante dokumenter fra Arendal kommune for valgt område.</p>
+      <p>${isSea
+        ? "Dokumenter som gjelder for sjøareal og havner i Arendal kommune."
+        : "Kommunale plandokumenter for valgt landområde."}</p>
       <div class="info-panel-links">
-        ${seaLinks}
-        <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/" target="_blank" rel="noopener">Alle planer – planportalen →</a>
-        <a class="info-link" href="https://karttjenester.ikt-agder.no/planinnsyn_arendal/" target="_blank" rel="noopener">Planinnsyn – reguleringsplaner i kart →</a>
+        ${contextLinks}
+        <a class="info-link" href="https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/" target="_blank" rel="noopener">Alle planer – Arendal planportal →</a>
         <a class="info-link" href="https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/" target="_blank" rel="noopener">Plan, bygg og eiendom →</a>
         <a class="info-link" href="https://agderfk.no/vare-tjenester/plan-og-areal/" target="_blank" rel="noopener">Agder fylkeskommune – plan og areal →</a>
       </div>
