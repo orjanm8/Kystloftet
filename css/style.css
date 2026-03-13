@@ -84,9 +84,15 @@ html, body {
 }
 
 .logo-mark {
-  font-size: 24px;
+  font-size: 26px;
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: -1px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
+
+.logo-k { color: #ffffff; }
+.logo-l { color: #38bdf8; }
 
 .logo-name {
   font-size: 18px;
@@ -522,17 +528,85 @@ html, body {
 /* ─── LOVGRUPPE ─────────────────────────────────────────────────── */
 
 .law-group {
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
-.law-group-header {
+.law-group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 4px 5px;
+  text-align: left;
+  gap: 6px;
+}
+
+.law-group-toggle:hover .law-group-label { color: var(--blue-600); }
+
+.law-group-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--grey-500);
-  padding: 6px 4px 4px;
+  transition: color .15s;
 }
+
+.law-group-chevron {
+  flex-shrink: 0;
+  color: var(--grey-400);
+  transition: transform .2s ease;
+}
+
+.law-group-toggle.open .law-group-chevron {
+  transform: rotate(180deg);
+}
+
+.law-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s ease;
+}
+
+.law-group-body.open {
+  max-height: 2000px;
+}
+
+/* Enkelt filter-modus (ikke gruppert) */
+.law-single-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s ease;
+}
+
+.law-single-list.open { max-height: 2000px; }
+
+.law-single-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 4px 5px;
+  text-align: left;
+  gap: 6px;
+}
+
+.law-single-toggle .law-group-label { color: var(--grey-500); }
+.law-single-toggle:hover .law-group-label { color: var(--blue-600); }
+.law-single-toggle .law-group-chevron { transition: transform .2s ease; }
+.law-single-toggle.open .law-group-chevron { transform: rotate(180deg); }
 
 /* ─── LOVKORT ───────────────────────────────────────────────────── */
 

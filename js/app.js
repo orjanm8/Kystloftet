@@ -288,6 +288,8 @@ function displayResults(context, geoInfo, meta) {
   showResults();
 }
 
+const CHEVRON_SVG = `<svg class="law-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+
 function renderLawList(context, filterTopic) {
   const laws = filterLaws(context, filterTopic);
   const list = document.getElementById("results-list");
@@ -301,7 +303,6 @@ function renderLawList(context, filterTopic) {
     return;
   }
 
-  // Grupper etter tema
   const topicLabels = {
     havbruk: "Havbruk / Akvakultur",
     fiskeri: "Fiskeri",
@@ -310,35 +311,49 @@ function renderLawList(context, filterTopic) {
     energi: "Energi / Offshore",
   };
 
-  // Finn hvilke temaer som er representert
-  const usedTopics = [];
-  if (filterTopic === "all") {
-    Object.keys(topicLabels).forEach((t) => {
-      if (laws.some((l) => l.topics.includes(t))) usedTopics.push(t);
-    });
-  } else {
-    usedTopics.push(filterTopic);
-  }
-
   let html = "";
 
   if (filterTopic === "all") {
-    // Vis gruppert per tema
-    usedTopics.forEach((topic) => {
+    // Gruppert, kollapsbar per tema – lukket som standard
+    Object.keys(topicLabels).forEach((topic) => {
       const topicLaws = laws.filter((l) => l.topics.includes(topic));
       if (topicLaws.length === 0) return;
-      html += `<div class="law-group">
-        <div class="law-group-header">${topicLabels[topic]}</div>
-        ${topicLaws.map(renderLawCard).join("")}
-      </div>`;
+      html += `
+        <div class="law-group">
+          <button class="law-group-toggle" data-group="${topic}">
+            <span class="law-group-label">${topicLabels[topic]} (${topicLaws.length})</span>
+            ${CHEVRON_SVG}
+          </button>
+          <div class="law-group-body">
+            ${topicLaws.map(renderLawCard).join("")}
+          </div>
+        </div>`;
     });
   } else {
-    html = laws.map(renderLawCard).join("");
+    // Enkelt filter – én kollapsbar gruppe
+    const label = topicLabels[filterTopic] || filterTopic;
+    html = `
+      <button class="law-single-toggle" data-group="single">
+        <span class="law-group-label">${label} (${laws.length})</span>
+        ${CHEVRON_SVG}
+      </button>
+      <div class="law-single-list">
+        ${laws.map(renderLawCard).join("")}
+      </div>`;
   }
 
   list.innerHTML = html;
 
-  // Legg til klikk-handler for å expandere kort
+  // Toggle for gruppehoveder
+  list.querySelectorAll(".law-group-toggle, .law-single-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const body = btn.nextElementSibling;
+      const isOpen = body.classList.toggle("open");
+      btn.classList.toggle("open", isOpen);
+    });
+  });
+
+  // Toggle for individuelle lovkort
   list.querySelectorAll(".law-card").forEach((card) => {
     card.addEventListener("click", () => card.classList.toggle("expanded"));
   });
