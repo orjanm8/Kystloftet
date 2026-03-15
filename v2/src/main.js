@@ -44,6 +44,14 @@ const kystverketWMS =
   '&WIDTH={width}&HEIGHT={height}' +
   '&BBOX={bbox-epsg-3857}';
 
+// ─── WMS GetFeatureInfo – lag som kan forespørres ────────────────────────────
+const WMS_QUERYABLE = [
+  { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',            layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
+  { layerId: 'havnedata-layer',  wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'havnedata',                 label: 'Havnedata' },
+  { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
+  { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
+];
+
 // ─── Map (sentrert på Arendal / Aust-Agder) ───────────────────────────────────
 const map = new maplibregl.Map({
   container: 'map',
@@ -466,6 +474,7 @@ function startDraw() {
   map.getCanvas().style.cursor = 'crosshair';
   updateDrawSources();
   hideLawPanel();
+  if (wmsInfoPanel) wmsInfoPanel.classList.remove('open');
   if (drawBtn) { drawBtn.querySelector('span').textContent = 'Avbryt tegning'; drawBtn.classList.add('active'); }
 }
 
@@ -501,7 +510,10 @@ function clearDraw() {
 }
 
 function handleMapClick(e) {
-  if (!draw.active) return;
+  if (!draw.active) {
+    queryWmsFeatureInfo(e);
+    return;
+  }
   clearTimeout(clickTimer);
   const pt = [e.lngLat.lng, e.lngLat.lat];
   clickTimer = setTimeout(() => { draw.points.push(pt); updateDrawSources(); }, 180);
@@ -519,6 +531,108 @@ function handleMapMousemove(e) {
   if (!draw.active || draw.points.length === 0) return;
   const pts = [...draw.points, [e.lngLat.lng, e.lngLat.lat]];
   map.getSource('draw-line').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts } });
+}
+
+// ─── WMS GetFeatureInfo-panel ─────────────────────────────────────────────────
+let wmsInfoPanel = null;
+
+function buildWmsInfoPanel() {
+  const panel = document.createElement('div');
+  panel.id = 'wms-info-panel';
+  panel.className = 'wms-info-panel';
+  panel.innerHTML = `
+    <div class="wms-info-header">
+      <div class="wms-info-title"><span>🗺</span> Kartinformasjon</div>
+      <button class="wms-info-close" title="Lukk">✕</button>
+    </div>
+    <div class="wms-info-body" id="wms-info-body"></div>`;
+  panel.querySelector('.wms-info-close').addEventListener('click', () => {
+    panel.classList.remove('open');
+  });
+  document.getElementById('map').appendChild(panel);
+  wmsInfoPanel = panel;
+}
+
+function lngLatToMercator(lng, lat) {
+  const x = lng * 20037508.34 / 180;
+  const y = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180) * 20037508.34 / 180;
+  return [x, y];
+}
+
+function buildGetFeatureInfoUrl(wmsUrl, layerName, bounds, size, pt) {
+  const [west, south] = lngLatToMercator(bounds.getWest(), bounds.getSouth());
+  const [east, north] = lngLatToMercator(bounds.getEast(), bounds.getNorth());
+  return (
+    `${wmsUrl}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo` +
+    `&LAYERS=${encodeURIComponent(layerName)}&QUERY_LAYERS=${encodeURIComponent(layerName)}` +
+    `&SRS=EPSG:3857&BBOX=${west},${south},${east},${north}` +
+    `&WIDTH=${size.w}&HEIGHT=${size.h}&X=${Math.round(pt.x)}&Y=${Math.round(pt.y)}` +
+    `&INFO_FORMAT=application%2Fjson&FEATURE_COUNT=5`
+  );
+}
+
+function renderWmsProperties(props) {
+  const rows = Object.entries(props).filter(([, v]) => v !== null && v !== '');
+  if (!rows.length) return '<span style="color:#94a3b8;font-size:12px">Ingen egenskaper</span>';
+  return `<table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
+}
+
+async function queryWmsFeatureInfo(e) {
+  if (!wmsInfoPanel || draw.active || draw.finished) return;
+
+  const visibleLayers = WMS_QUERYABLE.filter(cfg => {
+    try {
+      const vis = map.getLayoutProperty(cfg.layerId, 'visibility');
+      return vis == null || vis === 'visible';
+    } catch { return false; }
+  });
+  if (!visibleLayers.length) return;
+
+  const canvas = map.getCanvas();
+  const size = { w: canvas.clientWidth, h: canvas.clientHeight };
+  const bounds = map.getBounds();
+
+  const body = document.getElementById('wms-info-body');
+  body.innerHTML = '<div class="wms-info-loading"><span class="zone-spinner"></span><span>Henter kartinformasjon…</span></div>';
+  wmsInfoPanel.classList.add('open');
+
+  const results = await Promise.all(
+    visibleLayers.map(async cfg => {
+      try {
+        const url = buildGetFeatureInfoUrl(cfg.wmsUrl, cfg.layer, bounds, size, e.point);
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return { ...cfg, features: [] };
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('json')) {
+          const data = await res.json();
+          return { ...cfg, features: data.features || [] };
+        }
+        return { ...cfg, features: [] };
+      } catch {
+        return { ...cfg, features: [] };
+      }
+    }),
+  );
+
+  const withData = results.filter(r => r.features.length > 0);
+  if (!withData.length) {
+    body.innerHTML = '<p class="wms-info-empty">Ingen kartinformasjon funnet på dette punktet.</p>';
+    return;
+  }
+
+  body.innerHTML = '';
+  withData.forEach(({ label, features }) => {
+    const block = document.createElement('div');
+    block.className = 'wms-layer-block';
+    block.innerHTML = `<div class="wms-layer-name">${label}</div>`;
+    features.forEach(feat => {
+      const el = document.createElement('div');
+      el.className = 'wms-feature';
+      el.innerHTML = renderWmsProperties(feat.properties || {});
+      block.appendChild(el);
+    });
+    body.appendChild(block);
+  });
 }
 
 // ─── Havner og kaier (Overpass API) ──────────────────────────────────────────
@@ -1047,4 +1161,5 @@ map.on('load', () => {
   buildSearchBar();
   buildDrawControl();
   buildLawPanel();
+  buildWmsInfoPanel();
 });

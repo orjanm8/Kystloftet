@@ -578,3 +578,122 @@ details:not([open]) .law-category-header::after { transform: rotate(-90deg); }
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ─── WMS-informasjonspanel ──────────────────────────────────────────────────── */
+.wms-info-panel {
+  position: absolute;
+  top: 56px;
+  right: 12px;
+  width: 290px;
+  max-height: 400px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.16);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(-8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s;
+}
+
+.wms-info-panel.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.wms-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 9px;
+  background: #0c2340;
+  border-radius: 10px 10px 0 0;
+  flex-shrink: 0;
+}
+
+.wms-info-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wms-info-close {
+  border: none;
+  background: rgba(255,255,255,0.12);
+  cursor: pointer;
+  color: #fff;
+  font-size: 13px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.wms-info-close:hover { background: rgba(255,255,255,0.25); }
+
+.wms-info-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 10px 14px;
+}
+
+.wms-info-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.wms-info-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.wms-layer-block { margin-bottom: 12px; }
+.wms-layer-block:last-child { margin-bottom: 0; }
+
+.wms-layer-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #0c2340;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.wms-feature { margin-bottom: 6px; font-size: 12px; }
+.wms-feature:last-child { margin-bottom: 0; }
+
+.wms-feature table { width: 100%; border-collapse: collapse; }
+
+.wms-feature tr:nth-child(odd) td { background: #f8fafc; }
+
+.wms-feature td {
+  padding: 2px 5px;
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.wms-feature td:first-child {
+  font-weight: 600;
+  color: #475569;
+  width: 44%;
+  white-space: nowrap;
+}
+
+.wms-feature td:last-child {
+  color: #1e293b;
+  word-break: break-word;
+}
