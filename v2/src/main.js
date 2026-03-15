@@ -222,14 +222,83 @@ function buildDocSection(title, docs) {
   return details;
 }
 
-function buildDynamicDocPanel(container, municipality, zone, centroid) {
+// ─── CORS-proxy-basert PDF-søk på kommunens nettsted ─────────────────────────
+
+const KYST_ORD = [
+  'arealplan', 'kommuneplan', 'sjø', 'sjøareal', 'hav', 'havbruk',
+  'kyst', 'kystsone', 'kystplan', 'havn', 'havneplan', 'båthavn',
+  'strandsone', 'marin', 'akvakultur', 'fiskeri', 'brygge', 'molo',
+  'småbåt', 'reguleringsplan', 'planbestemmelse', 'plankart',
+];
+
+function kystScore(tekst) {
+  const l = (tekst || '').toLowerCase();
+  return KYST_ORD.filter(kw => l.includes(kw)).length;
+}
+
+async function hentViaProxy(url) {
+  const proxyer = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  ];
+  for (const proxy of proxyer) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 12000);
+      const res = await fetch(proxy, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) return res.text();
+    } catch (_) { /* prøv neste */ }
+  }
+  return null;
+}
+
+function trekkUtPDFer(html, baseUrl) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const sett = new Set();
+  const lenker = [];
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (!href.toLowerCase().includes('.pdf')) return;
+    let url;
+    try { url = new URL(href, baseUrl).href; } catch (_) { return; }
+    if (sett.has(url)) return;
+    sett.add(url);
+    const tittel = a.textContent.trim().replace(/\s+/g, ' ') ||
+      decodeURIComponent(url.split('/').pop()).replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+    lenker.push({ tittel, url, score: kystScore(url + ' ' + tittel) });
+  });
+  return lenker.sort((a, b) => b.score - a.score).slice(0, 12);
+}
+
+async function sokKommune(slug) {
+  const base = `https://www.${slug}.kommune.no`;
+  const q = 'arealplan sjø havn kyst';
+  const sokeUrler = [
+    `${base}/?s=${encodeURIComponent(q)}`,
+    `${base}/sok/?q=${encodeURIComponent(q)}`,
+    `${base}/search/?q=${encodeURIComponent(q)}`,
+    `${base}/tjenester/plan-bygg-og-eiendom/`,
+    `${base}/politikk-og-medvirkning/kommunens-planer/`,
+  ];
+  for (const url of sokeUrler) {
+    const html = await hentViaProxy(url);
+    if (!html) continue;
+    const pdfer = trekkUtPDFer(html, base);
+    if (pdfer.length >= 1) return pdfer;
+  }
+  return [];
+}
+
+async function buildDynamicDocPanel(container, municipality, zone, centroid) {
   container.innerHTML = '';
 
   const [lon, lat] = centroid;
   const isSea = zone === 'sea';
   const isCoastal = zone === 'coastal' || zone === 'sea';
 
-  // ── Intro og kommuneseksjon ────────────────────────────────────────────────
+  // ── Kommuneseksjon med PDF-søk ────────────────────────────────────────────
   if (!municipality || !municipality.kommunenavnNorsk) {
     const p = document.createElement('p');
     p.className = 'law-intro';
@@ -246,49 +315,74 @@ function buildDynamicDocPanel(container, municipality, zone, centroid) {
     intro.innerHTML = `Plandokumenter for <strong>${navn} kommune</strong>${county ? ` · ${county}` : ''}.`;
     container.appendChild(intro);
 
-    // Kommuneplan og arealplan
-    container.appendChild(buildDocSection(`${navn} – Arealplan og regulering`, [
-      {
-        name: `${navn} kommunes planportal`,
-        desc: `Kommuneplan, reguleringsplaner, bestemmelser og planretningslinjer for ${navn}`,
-        url: `https://www.${slug}.kommune.no/`,
-        type: 'link',
-      },
-      {
-        name: 'Kommunekart – arealplaner',
-        desc: `Kartbasert innsynsløsning med alle reguleringsplaner og arealformål i ${navn}`,
-        url: `https://kommunekart.com/?urlParams=${slug}`,
-        type: 'link',
-      },
-      {
-        name: `Søk sjø- og kystplaner – ${navn}`,
-        desc: `Søk etter reguleringsplan, kystsoneplan og havbruksplan på kommunens nettside`,
-        url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+reguleringsplan+sj%C3%B8`,
-        type: 'link',
-      },
-    ]));
+    // Lasteindikator
+    const loadingSection = document.createElement('div');
+    loadingSection.className = 'doc-loading-section';
+    loadingSection.innerHTML = `
+      <div class="doc-loading-row">
+        <span class="doc-spinner"></span>
+        Søker etter PDFer på ${slug}.kommune.no…
+      </div>`;
+    container.appendChild(loadingSection);
 
-    // Sjø og kyst – vis bare for coastal/sea
-    if (isCoastal) {
-      container.appendChild(buildDocSection(`${navn} – Sjø, kyst og havbruk`, [
+    // Kjør søket asynkront
+    const pdfer = await sokKommune(slug);
+    loadingSection.remove();
+
+    if (pdfer.length > 0) {
+      // Bygg seksjon med faktiske PDF-lenker
+      const docs = pdfer.map(p => ({
+        name: p.tittel,
+        desc: `Funnet på ${slug}.kommune.no`,
+        url: p.url,
+        type: 'pdf',
+      }));
+      container.appendChild(buildDocSection(`${navn} – PDFer (arealplan, sjø, kyst)`, docs));
+    } else {
+      // Fallback: klikkbare søkelenker
+      container.appendChild(buildDocSection(`${navn} – Planportaler`, [
         {
-          name: `Søk havbruk og oppdrett – ${navn}`,
-          desc: `Finn akvakulturtillatelser, oppdrettslokaliteter og sjøarealplaner i ${navn}`,
-          url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+akvakultur+oppdrett+havbruk`,
+          name: `Søk arealplan/sjø på ${slug}.kommune.no`,
+          desc: `Åpner søk etter «arealplan sjø havn kyst» på kommunens nettsted`,
+          url: `https://www.${slug}.kommune.no/?s=${encodeURIComponent('arealplan sjø havn kyst')}`,
           type: 'link',
         },
         {
-          name: `Søk utbygging og kai – ${navn}`,
-          desc: `Søk etter planer for brygge, kai, molo og kystnær utbygging i ${navn}`,
-          url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+kai+brygge+molo+kystplan`,
+          name: `Arealplaner.no – ${navn}`,
+          desc: `Nasjonalt planregister med gjeldende kommuneplaner og reguleringsplaner`,
+          url: `https://www.arealplaner.no/kommuner`,
+          type: 'link',
+        },
+        {
+          name: `eInnsyn – ${navn} postliste`,
+          desc: `Offentlig elektronisk postjournal – søk i dokumenter fra kommunen`,
+          url: `https://einnsyn.no/search?q=${encodeURIComponent(navn + ' arealplan')}`,
+          type: 'link',
+        },
+      ]));
+    }
+
+    // Sjø og kyst-ressurser (alltid vist for coastal/sea)
+    if (isCoastal) {
+      container.appendChild(buildDocSection(`${navn} – Sjø og kyst`, [
+        {
+          name: `Søk havbruk og akvakultur – ${navn}`,
+          desc: `Finn arealplaner for akvakultur, oppdrett og sjøområder`,
+          url: `https://www.${slug}.kommune.no/?s=${encodeURIComponent('akvakultur havbruk oppdrett sjøareal')}`,
+          type: 'link',
+        },
+        {
+          name: `Søk brygge, kai og molo – ${navn}`,
+          desc: `Reguleringsplaner for kystnær infrastruktur`,
+          url: `https://www.${slug}.kommune.no/?s=${encodeURIComponent('brygge kai molo havneplan')}`,
           type: 'link',
         },
       ]));
     }
   }
 
-  // ── Geonorge og nasjonale kartressurser ───────────────────────────────────
-  container.appendChild(buildDocSection('Geonorge og nasjonale kart', [
+  // ── Nasjonale ressurser ───────────────────────────────────────────────────
+  container.appendChild(buildDocSection('Nasjonale kart og registre', [
     {
       name: 'Geonorge – arealplaner (dette området)',
       desc: 'Nasjonalt planregister – kart sentrert på polygonets posisjon',
