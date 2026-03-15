@@ -6,24 +6,36 @@ import { LAWS, ZONE_LABELS, filterLawsByZone, countLaws } from './laws.js';
 // ─── Kommunedokumenter – Arendal ─────────────────────────────────────────────
 const MUNICIPAL_DOCS = [
   {
-    title: 'Kommuneplan',
+    title: 'Kommuneplanens arealdel 2023–2033',
     docs: [
       {
         name: 'Kommuneplanens arealdel',
         desc: 'Overordnet plan for arealbruk i Arendal, inkl. sjøarealer og strandsone',
-        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/arealdelen/',
+        url: 'https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/',
         type: 'link',
       },
       {
-        name: 'Kommuneplanens samfunnsdel',
-        desc: 'Overordnede mål og strategier for samfunnsutviklingen i Arendal',
-        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/samfunnsdelen/',
-        type: 'link',
+        name: 'Planbestemmelser (PDF)',
+        desc: 'Juridisk bindende bestemmelser – Kommuneplanens arealdel 2023–2033',
+        url: 'https://www.arendal.kommune.no/_f/p1/i5917f255-7513-4b25-97a8-34659f731ff4/vedlegg-2-kommuneplanbestemmelser-januar-2023-27012023.pdf',
+        type: 'pdf',
       },
       {
-        name: 'Planbestemmelser og retningslinjer',
-        desc: 'Juridisk bindende bestemmelser knyttet til kommuneplanens arealdel',
-        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/arealdelen/',
+        name: 'Planbeskrivelse 2023–2033 (PDF)',
+        desc: 'Beskrivelse av planens innhold, vurderinger og konsekvenser',
+        url: 'https://www.arendal.kommune.no/_f/p1/i4bf2f64d-bba0-4be8-a20f-e981b90a3def/planbeskrivelse-2023-2033-ny-horing-justert-etter-vedtak-25januar-2023.pdf',
+        type: 'pdf',
+      },
+      {
+        name: 'Arealstrategier (PDF)',
+        desc: 'Forslag til arealstrategier for Arendal kommune',
+        url: 'https://www.arendal.kommune.no/_f/p1/i7802d02f-55bc-45cb-9819-8d71e0da3168/kommuneplan-arealdel-forslag-til-arealstrategier-arendal-kommune.pdf',
+        type: 'pdf',
+      },
+      {
+        name: 'Revisjon av arealdelen (pågående)',
+        desc: 'Informasjon om pågående revisjonsarbeid av kommuneplanens arealdel',
+        url: 'https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/ny-kommuneplan-revisjon-av-kommuneplanens-arealdel/',
         type: 'link',
       },
     ],
@@ -32,44 +44,79 @@ const MUNICIPAL_DOCS = [
     title: 'Kommunedelplaner',
     docs: [
       {
-        name: 'Kystsoneplan / sjøarealplan',
-        desc: 'Plan for sjøarealene i Arendal – akvakultur, friluftsliv, ferdsel og vern',
-        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/',
+        name: 'Kommunedelplan for småbåthavner',
+        desc: 'Plan for småbåthavner og uthavner i Arendal kommune',
+        url: 'https://www.arendal.kommune.no/politikk-og-organisasjon/kommuneplan-planer-og-styringsdokumenter/kommunedelplaner/smabathavner/',
         type: 'link',
       },
       {
-        name: 'Alle planer i kommunens planregister',
-        desc: 'Søk etter reguleringsplaner og kommunedelplaner på Arendal kommunes sider',
-        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/reguleringsplaner/',
+        name: 'Kommunedelplan småbåthavner 2010–2020 (PDF)',
+        desc: 'Gjeldende kommunedelplan for småbåthavner med bestemmelser',
+        url: 'https://www.arendal.kommune.no/_f/p1/iac3d68a9-5dc5-41d8-83b8-833dd001c559/Kommunedelplan_smaabaathavner_2010-2020.pdf',
+        type: 'pdf',
+      },
+      {
+        name: 'Alle kommunedelplaner',
+        desc: 'Oversikt over alle kommunedelplaner i Arendal',
+        url: 'https://www.arendal.kommune.no/politikk-og-organisasjon/kommuneplan-planer-og-styringsdokumenter/kommunedelplaner/',
         type: 'link',
       },
     ],
   },
   {
-    title: 'Nasjonale kartressurser',
+    title: 'Reguleringsplaner (sjø og kyst)',
     docs: [
       {
-        name: 'Geonorge – planer og arealdata',
-        desc: 'Kartverkets nasjonale portal for arealplaner og geografiske data',
-        url: 'https://www.geonorge.no/aktuelt/om-geonorge/',
+        name: 'Arendal havn – reguleringsplan',
+        desc: 'Vedtatt reguleringsplan for Arendal havn',
+        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/arendal-havn-del-av.22121.aspx',
         type: 'link',
       },
       {
-        name: 'Kommunekart.com – Arendal',
-        desc: 'Kartinnsynsløsning med reguleringsplaner og arealformål',
-        url: 'https://kommunekart.com/?urlParams=arendal',
+        name: 'Innseiling Arendal (under arbeid)',
+        desc: 'Reguleringsplan for innseiling til Arendal – pågående planarbeid',
+        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/reguleringsplaner-under-arbeid/innseiling-arendal.26864.aspx',
+        type: 'link',
+      },
+      {
+        name: 'Paddelandet småbåthavn',
+        desc: 'Vedtatt reguleringsplan for Paddelandet småbåthavn',
+        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/paddelandet-smabathavn.8621.aspx',
+        type: 'link',
+      },
+      {
+        name: 'Alle vedtatte reguleringsplaner',
+        desc: 'Søk i alle vedtatte reguleringsplaner i Arendal kommune',
+        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/',
+        type: 'link',
+      },
+    ],
+  },
+  {
+    title: 'Kart og eiendomsinformasjon',
+    docs: [
+      {
+        name: 'Eiendomsinformasjon og kart – Arendal',
+        desc: 'Kommunens karttjenester, eiendomsdata og arealformål',
+        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/eiendomsinformasjon-og-kart/',
+        type: 'link',
+      },
+      {
+        name: 'Geonorge – nasjonale arealdata',
+        desc: 'Kartverkets portal for arealplaner, geografiske data og WMS-tjenester',
+        url: 'https://www.geonorge.no/',
+        type: 'link',
+      },
+      {
+        name: 'Fiskeridirektoratets kart',
+        desc: 'Akvakulturlokaliteter, fiskerigrenser og marine sjødata',
+        url: 'https://kart.fiskeridir.no/',
         type: 'link',
       },
       {
         name: 'Miljødirektoratets naturbase',
-        desc: 'Verneområder, marine reservater og naturverdier',
+        desc: 'Verneområder, marine reservater og naturverdier langs kysten',
         url: 'https://naturbase.no/',
-        type: 'link',
-      },
-      {
-        name: 'Fiskeridirektoratets kartinnsynsportal',
-        desc: 'Akvakulturlokaliteter, fiskerigrenser og relevante sjødata',
-        url: 'https://kart.fiskeridir.no/',
         type: 'link',
       },
     ],
@@ -477,8 +524,11 @@ function buildDocPanel(container) {
       link.href = doc.url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.className = 'doc-link';
-      link.innerHTML = `${doc.name} <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+      link.className = `doc-link${doc.type === 'pdf' ? ' doc-pdf' : ''}`;
+      const icon = doc.type === 'pdf'
+        ? '<span class="doc-type-badge">PDF</span>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+      link.innerHTML = `${doc.name} ${icon}`;
 
       const desc = document.createElement('p');
       desc.className = 'doc-desc';

@@ -466,3 +466,19 @@ details:not([open]) .law-category-header::after { transform: rotate(-90deg); }
   margin-top: 3px;
   line-height: 1.45;
 }
+
+.doc-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+
+.doc-pdf { color: #b91c1c; }
+.doc-pdf:hover { color: #991b1b; }
