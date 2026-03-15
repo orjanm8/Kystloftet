@@ -534,3 +534,18 @@ details:not([open]) .law-category-header::after { transform: rotate(-90deg); }
   margin-top: 3px;
 }
 .popup-link:hover { text-decoration: underline; }
+
+.popup-name-loading {
+  display: inline-block;
+  width: 90px;
+  height: 13px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

@@ -116,52 +116,60 @@ function goToMyPosition() {
   );
 }
 
-// ─── Sone-deteksjon via Nominatim ─────────────────────────────────────────────
-async function detectZone(centroid) {
+// ─── Stedsanalyse – sone OG kommune fra én Nominatim-forespørsel ──────────────
+// (ws.geonorge.no/kommuneinfo støtter ikke CORS fra nettleser)
+async function analyzeLocation(centroid) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${centroid[1]}&lon=${centroid[0]}&format=json`,
-      { headers: { 'Accept-Language': 'no' }, signal: AbortSignal.timeout(6000) },
+      { headers: { 'Accept-Language': 'no' }, signal: AbortSignal.timeout(8000) },
     );
-    if (!res.ok) return 'sea';
+    if (!res.ok) return { zone: 'sea', municipality: null };
     const data = await res.json();
-    if (data.error) return 'sea';
+    if (data.error) return { zone: 'sea', municipality: null };
 
     const addr = data.address || {};
-    const cls = data.class;
+    const cls  = data.class;
     const type = data.type;
 
-    // Åpent hav
-    if (addr.sea || addr.ocean || addr.bay || type === 'sea' || type === 'ocean') return 'sea';
+    // ── Sone ──────────────────────────────────────────────────────────────────
+    let zone;
+    if (addr.sea || addr.ocean || addr.bay || type === 'sea' || type === 'ocean') zone = 'sea';
+    else if (cls === 'natural' && ['water', 'bay', 'strait', 'fjord', 'inlet'].includes(type)) zone = 'coastal';
+    else if (cls === 'waterway') zone = 'coastal';
+    else if (addr.road || addr.suburb || addr.residential || addr.village || addr.town || addr.city) zone = 'land';
+    else if (addr.municipality || addr.county || addr.country_code === 'no') zone = 'coastal';
+    else zone = 'sea';
 
-    // Sjøareal (fjord, sund, bukt)
-    if (cls === 'natural' && ['water', 'bay', 'strait', 'fjord', 'inlet'].includes(type)) return 'coastal';
-    if (cls === 'waterway') return 'coastal';
+    // ── Kommunenavn – Nominatim er inkonsistent for Norge ────────────────────
+    // Ref: https://github.com/osm-search/Nominatim/issues/1017
+    // Moderne Nominatim: addr.municipality = kommunenavn, addr.state = fylke
+    // Eldre/quirky: addr.county = kommunenavn, addr.state = fylke
+    let kommunenavn =
+      addr.municipality ||
+      addr.city         ||
+      addr.town         ||
+      null;
 
-    // Tydelig landadresse
-    if (addr.road || addr.suburb || addr.residential || addr.village || addr.town || addr.city) return 'land';
+    // Norsk quirk: når addr.state er satt men addr.municipality mangler,
+    // inneholder addr.county faktisk kommunenavnet (ikke fylket)
+    if (!kommunenavn && addr.state && addr.county) kommunenavn = addr.county;
 
-    // Har kommune/fylke men ingen spesifikk adresse → kystnær sone
-    if (addr.municipality || addr.county || addr.country_code === 'no') return 'coastal';
+    // Siste utvei: parse display_name ("..., Kommunenavn, Fylke, Norge")
+    if (!kommunenavn && data.display_name) {
+      const parts = data.display_name.split(',').map(s => s.trim());
+      const noIdx = parts.findLastIndex(
+        p => p.toLowerCase() === 'norge' || p.toLowerCase() === 'norway',
+      );
+      if (noIdx >= 2) kommunenavn = parts[noIdx - 2];
+    }
 
-    return 'sea';
+    const county = addr.state || (addr.county !== kommunenavn ? addr.county : null) || null;
+    const municipality = kommunenavn ? { kommunenavnNorsk: kommunenavn, county } : null;
+
+    return { zone, municipality };
   } catch {
-    return 'unknown';
-  }
-}
-
-// ─── Kommuneoppslag – Kartverket ──────────────────────────────────────────────
-async function fetchMunicipalityInfo(lng, lat) {
-  try {
-    const res = await fetch(
-      `https://ws.geonorge.no/kommuneinfo/v1/punkt?nord=${lat}&ost=${lng}&koordsys=4326`,
-      { signal: AbortSignal.timeout(7000) },
-    );
-    if (!res.ok) return null;
-    return await res.json();
-    // Returns { kommunenummer, kommunenavnNorsk, fylkesnummer, fylkesnavnNorsk, ... }
-  } catch {
-    return null;
+    return { zone: 'unknown', municipality: null };
   }
 }
 
@@ -214,73 +222,104 @@ function buildDocSection(title, docs) {
   return details;
 }
 
-function buildDynamicDocPanel(container, kommuneInfo, centroid) {
+function buildDynamicDocPanel(container, municipality, zone, centroid) {
   container.innerHTML = '';
 
   const [lon, lat] = centroid;
+  const isSea = zone === 'sea';
+  const isCoastal = zone === 'coastal' || zone === 'sea';
 
-  if (!kommuneInfo || !kommuneInfo.kommunenavnNorsk) {
-    const err = document.createElement('p');
-    err.className = 'law-intro';
-    err.textContent = 'Kunne ikke hente kommuneinformasjon for dette området (muligens åpent hav). Bruk nasjonale kartressurser nedenfor.';
-    container.appendChild(err);
+  // ── Intro og kommuneseksjon ────────────────────────────────────────────────
+  if (!municipality || !municipality.kommunenavnNorsk) {
+    const p = document.createElement('p');
+    p.className = 'law-intro';
+    p.textContent = isSea
+      ? 'Polygonen er tegnet i åpent hav uten kommunetilhørighet. Bruk nasjonale ressurser nedenfor.'
+      : 'Kommuneinformasjon ikke tilgjengelig for dette området. Prøv å flytte polygonen litt.';
+    container.appendChild(p);
   } else {
-    const { kommunenavnNorsk: navn, kommunenummer, fylkesnavnNorsk: fylke } = kommuneInfo;
+    const { kommunenavnNorsk: navn, county } = municipality;
     const slug = municipalitySlug(navn);
 
     const intro = document.createElement('p');
     intro.className = 'law-intro';
-    intro.innerHTML = `Plandokumenter for <strong>${navn} kommune</strong>${fylke ? ` (${fylke})` : ''}.`;
+    intro.innerHTML = `Plandokumenter for <strong>${navn} kommune</strong>${county ? ` · ${county}` : ''}.`;
     container.appendChild(intro);
 
-    container.appendChild(buildDocSection(`${navn} – Planer og bestemmelser`, [
+    // Kommuneplan og arealplan
+    container.appendChild(buildDocSection(`${navn} – Arealplan og regulering`, [
       {
         name: `${navn} kommunes planportal`,
-        desc: `Kommunale planer, reguleringsplaner og bestemmelser for ${navn}`,
+        desc: `Kommuneplan, reguleringsplaner, bestemmelser og planretningslinjer for ${navn}`,
         url: `https://www.${slug}.kommune.no/`,
         type: 'link',
       },
       {
         name: 'Kommunekart – arealplaner',
-        desc: `Kartbasert innsynsløsning med reguleringsplaner og arealformål i ${navn}`,
+        desc: `Kartbasert innsynsløsning med alle reguleringsplaner og arealformål i ${navn}`,
         url: `https://kommunekart.com/?urlParams=${slug}`,
         type: 'link',
       },
       {
-        name: 'Geonorge – arealplaner for dette området',
-        desc: `Søk i nasjonalt planregister for reguleringsplaner og kommunedelplaner`,
-        url: `https://www.geonorge.no/kart/?zoom=12&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
+        name: `Søk sjø- og kystplaner – ${navn}`,
+        desc: `Søk etter reguleringsplan, kystsoneplan og havbruksplan på kommunens nettside`,
+        url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+reguleringsplan+sj%C3%B8`,
         type: 'link',
       },
     ]));
+
+    // Sjø og kyst – vis bare for coastal/sea
+    if (isCoastal) {
+      container.appendChild(buildDocSection(`${navn} – Sjø, kyst og havbruk`, [
+        {
+          name: `Søk havbruk og oppdrett – ${navn}`,
+          desc: `Finn akvakulturtillatelser, oppdrettslokaliteter og sjøarealplaner i ${navn}`,
+          url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+akvakultur+oppdrett+havbruk`,
+          type: 'link',
+        },
+        {
+          name: `Søk utbygging og kai – ${navn}`,
+          desc: `Søk etter planer for brygge, kai, molo og kystnær utbygging i ${navn}`,
+          url: `https://duckduckgo.com/?q=site%3A${slug}.kommune.no+kai+brygge+molo+kystplan`,
+          type: 'link',
+        },
+      ]));
+    }
   }
 
-  container.appendChild(buildDocSection('Nasjonale kartressurser', [
+  // ── Geonorge og nasjonale kartressurser ───────────────────────────────────
+  container.appendChild(buildDocSection('Geonorge og nasjonale kart', [
     {
-      name: 'Fiskeridirektoratets kart',
-      desc: 'Akvakulturlokaliteter, fiskerigrenser og marine sjødata',
+      name: 'Geonorge – arealplaner (dette området)',
+      desc: 'Nasjonalt planregister – kart sentrert på polygonets posisjon',
+      url: `https://www.geonorge.no/kart/?zoom=12&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
+      type: 'link',
+    },
+    {
+      name: 'Fiskeridirektoratets kartinnsynsportal',
+      desc: 'Akvakulturlokaliteter, tildelte konsesjoner, fiskerigrenser og marine sjødata',
       url: 'https://kart.fiskeridir.no/',
       type: 'link',
     },
     {
       name: 'Miljødirektoratets naturbase',
-      desc: 'Verneområder, marine reservater og naturverdier langs kysten',
+      desc: 'Verneområder, marine reservater, naturverdier og kystsonedata',
       url: 'https://naturbase.no/',
       type: 'link',
     },
     {
       name: 'Statsforvalteren – plan og bygg',
-      desc: 'Statlig innsigelsesmyndighet og nasjonale planretningslinjer',
+      desc: 'Statlig innsigelsesmyndighet, nasjonale planretningslinjer og dispensasjonspraksis',
       url: 'https://www.statsforvalteren.no/',
       type: 'link',
     },
   ]));
 }
 
-function updateDocPanel(kommuneInfo, centroid) {
+function updateDocPanel(municipality, zone, centroid) {
   if (!lawPanel) return;
   const container = lawPanel.querySelector('#tab-dokumenter');
-  buildDynamicDocPanel(container, kommuneInfo, centroid);
+  buildDynamicDocPanel(container, municipality, zone, centroid);
 }
 
 // ─── Tegning ─────────────────────────────────────────────────────────────────
@@ -357,14 +396,11 @@ async function finishPolygon() {
   // Vis panel med loading-tilstand i begge faner
   showLawPanel(area, null);
 
-  // Hent sone og kommuneinfo parallelt
-  const [zone, kommuneInfo] = await Promise.all([
-    detectZone(centroid),
-    fetchMunicipalityInfo(centroid[0], centroid[1]),
-  ]);
+  // Hent sone + kommunenavn fra én Nominatim-forespørsel
+  const { zone, municipality } = await analyzeLocation(centroid);
 
   updatePanelZone(zone, area);
-  updateDocPanel(kommuneInfo, centroid);
+  updateDocPanel(municipality, zone, centroid);
 }
 
 function clearDraw() {
@@ -648,7 +684,7 @@ function buildLayerSwitcher() {
   sep.className = 'layer-sep';
   wrap.appendChild(sep);
 
-  // Havner og kaier-avkrysningsboks
+  // Havner og kaier (Overpass / OSM)
   const label = document.createElement('label');
   label.className = 'harbour-toggle';
   const cb = document.createElement('input');
@@ -666,6 +702,21 @@ function buildLayerSwitcher() {
   label.appendChild(cb);
   label.appendChild(cbLabel);
   wrap.appendChild(label);
+
+  // Geonorge Havnedata WMS (offisielle kaidata fra Kartverket)
+  const havneLabel = document.createElement('label');
+  havneLabel.className = 'harbour-toggle';
+  const havneCb = document.createElement('input');
+  havneCb.type = 'checkbox';
+  havneCb.id = 'havnedata-cb';
+  havneCb.addEventListener('change', e => {
+    map.setLayoutProperty('havnedata-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+  });
+  const havneCbLabel = document.createElement('span');
+  havneCbLabel.textContent = '🗺 Havnedata (Kartverket)';
+  havneLabel.appendChild(havneCb);
+  havneLabel.appendChild(havneCbLabel);
+  wrap.appendChild(havneLabel);
 
   document.getElementById('map').appendChild(wrap);
 }
@@ -728,6 +779,28 @@ map.on('load', () => {
   map.addLayer({ id: 'draw-outline-layer', type: 'line', source: 'draw-fill', paint: { 'line-color': '#2563eb', 'line-width': 2 } });
   map.addLayer({ id: 'draw-line-layer', type: 'line', source: 'draw-line', paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [4, 3] } });
 
+  // Geonorge Havnedata WMS-lag (offisielle havne- og kaidata fra Kystverket/Kartverket)
+  map.addSource('havnedata-wms', {
+    type: 'raster',
+    tiles: [
+      'https://wms.geonorge.no/skwms1/wms.havnedata?' +
+      'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
+      '&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857' +
+      '&LAYERS=Havnedata' +
+      '&WIDTH={width}&HEIGHT={height}' +
+      '&BBOX={bbox-epsg-3857}',
+    ],
+    tileSize: 256,
+    attribution: '© <a href="https://kartverket.no">Kartverket / Kystverket – Havnedata</a>',
+  });
+  map.addLayer({
+    id: 'havnedata-layer',
+    type: 'raster',
+    source: 'havnedata-wms',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.9 },
+  });
+
   // Havner og kaier-lag
   map.addSource('harbours', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
@@ -762,8 +835,24 @@ map.on('load', () => {
   // ─── Havne-popup ved klikk ────────────────────────────────────────────────
   let activeHarbourPopup = null;
 
-  map.on('click', 'harbours-layer', e => {
-    if (draw.active) return; // Ikke vis popup mens tegning pågår
+  function harbourPopupHtml(name, typeLabel, p, coords, loading) {
+    let html = `<div class="harbour-popup">`;
+    html += loading
+      ? `<span class="popup-name-loading">…</span>`
+      : `<strong>${name}</strong>`;
+    if (typeLabel) html += `<br/><span class="popup-type">${typeLabel}</span>`;
+    if (p.operator) html += `<br/><small class="popup-meta">Operatør: ${p.operator}</small>`;
+    if (p.website || p['contact:website']) {
+      const site = p.website || p['contact:website'];
+      html += `<br/><a href="${site}" target="_blank" rel="noopener noreferrer" class="popup-link">Nettside ↗</a>`;
+    }
+    html += `<br/><small class="popup-coords">${coords[1].toFixed(5)}° N &nbsp;${coords[0].toFixed(5)}° Ø</small>`;
+    html += '</div>';
+    return html;
+  }
+
+  map.on('click', 'harbours-layer', async e => {
+    if (draw.active) return;
     const feature = e.features[0];
     if (!feature) return;
 
@@ -776,23 +865,43 @@ map.on('load', () => {
     };
     const rawType = p['seamark:type'] || p.man_made || p.amenity || p.harbour || '';
     const typeLabel = typeMap[rawType] || (rawType ? rawType.charAt(0).toUpperCase() + rawType.slice(1) : '');
-    const name = p.name || p.ref || p['seamark:name'] || 'Ukjent navn';
 
-    let html = `<div class="harbour-popup"><strong>${name}</strong>`;
-    if (typeLabel) html += `<br/><span class="popup-type">${typeLabel}</span>`;
-    if (p.operator) html += `<br/><small class="popup-meta">Operatør: ${p.operator}</small>`;
-    if (p.website || p['contact:website']) {
-      const site = p.website || p['contact:website'];
-      html += `<br/><a href="${site}" target="_blank" rel="noopener noreferrer" class="popup-link">Nettside ↗</a>`;
-    }
-    html += `<br/><small class="popup-coords">${coords[1].toFixed(5)}° N &nbsp;${coords[0].toFixed(5)}° Ø</small>`;
-    html += '</div>';
+    // Navn fra OSM-properties (mange norske havner mangler dette)
+    let name = p.name || p['name:no'] || p.ref || p['seamark:name'] || p['official_name'] || null;
 
     if (activeHarbourPopup) activeHarbourPopup.remove();
+
+    // Vis popup umiddelbart – med spinner hvis navn mangler
     activeHarbourPopup = new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
       .setLngLat(coords)
-      .setHTML(html)
+      .setHTML(harbourPopupHtml(name || '', typeLabel, p, coords, !name))
       .addTo(map);
+
+    // Hvis navn mangler: slå opp via Nominatim reverse geocode
+    if (!name) {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${coords[1]}&lon=${coords[0]}&format=json`,
+          { headers: { 'Accept-Language': 'no' }, signal: AbortSignal.timeout(6000) },
+        );
+        const data = await res.json();
+        if (data && !data.error) {
+          // Nominatim kan returnere navn på sjølve elementet
+          name = data.name
+            || data.address?.harbour
+            || data.address?.marina
+            || data.address?.pier
+            || data.address?.amenity
+            || data.address?.man_made
+            || null;
+        }
+      } catch { /* behold spinner som fallback */ }
+
+      // Oppdater popup med funnet navn (eller "Ukjent navn")
+      if (activeHarbourPopup && activeHarbourPopup.isOpen()) {
+        activeHarbourPopup.setHTML(harbourPopupHtml(name || 'Ukjent navn', typeLabel, p, coords, false));
+      }
+    }
   });
 
   map.on('mouseenter', 'harbours-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
