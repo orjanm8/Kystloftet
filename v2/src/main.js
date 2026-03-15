@@ -47,7 +47,6 @@ const kystverketWMS =
 // ─── WMS GetFeatureInfo – lag som kan forespørres ────────────────────────────
 const WMS_QUERYABLE = [
   { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',            layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
-  { layerId: 'havnedata-layer',  wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'havnedata',                 label: 'Havnedata' },
   { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
   { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
 ];
@@ -646,10 +645,13 @@ function overpassToGeoJSON(data) {
       .map(el => {
         const coords = el.center ? [el.center.lon, el.center.lat] : (el.lon !== undefined ? [el.lon, el.lat] : null);
         if (!coords) return null;
+        const t = el.tags || {};
+        // Vis kun punkter som har et faktisk navn
+        if (!t.name && !t['name:no'] && !t.ref && !t['seamark:name'] && !t['official_name']) return null;
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: coords },
-          properties: { ...el.tags, osm_id: el.id },
+          properties: { ...t, osm_id: el.id },
         };
       })
       .filter(Boolean),
@@ -910,9 +912,8 @@ function buildLayerSwitcher() {
   wrap.appendChild(sep2);
 
   [
-    { id: 'havnedata-cb',  layerId: 'havnedata-layer', label: '🗺 Havnedata (alle lag)' },
-    { id: 'admhavn-cb',    layerId: 'admhavn-layer',   label: '🟦 Adm. havneområde' },
-    { id: 'farts-cb',      layerId: 'farts-layer',     label: '⚡ Fartsrestriksjoner' },
+    { id: 'admhavn-cb', layerId: 'admhavn-layer', label: '🟦 Adm. havneområde' },
+    { id: 'farts-cb',   layerId: 'farts-layer',   label: '⚡ Fartsrestriksjoner' },
   ].forEach(({ id, layerId, label }) => {
     const lbl = document.createElement('label');
     lbl.className = 'harbour-toggle';
