@@ -68,7 +68,7 @@ const LAWS = [
     topics: ["fiskeri"],
     seaZone: true,
     coastal: true,
-    national: true,
+    national: false,
     url: "https://lovdata.no/lov/2008-06-06-37",
     keyParagraphs: ["§ 3 Statlig eiendomsrett", "§ 16 Kvoteregulering"],
   },
@@ -83,7 +83,7 @@ const LAWS = [
     topics: ["fiskeri"],
     seaZone: true,
     coastal: false,
-    national: true,
+    national: false,
     url: "https://lovdata.no/lov/1999-03-26-15",
     keyParagraphs: ["§ 6 Ervervstillatelse", "§ 12 Adgang til å delta"],
   },
@@ -185,7 +185,7 @@ const LAWS = [
     topics: ["planlegging", "fiskeri"],
     seaZone: true,
     coastal: true,
-    national: true,
+    national: false,
     url: "https://lovdata.no/lov/2019-06-21-70",
     keyParagraphs: [
       "§ 14 Fartsrestriksjoner",
@@ -267,7 +267,7 @@ const LAWS = [
     topics: ["planlegging", "fiskeri"],
     seaZone: true,
     coastal: false,
-    national: true,
+    national: false,
     url: "https://lovdata.no/lov/1994-06-24-39",
     keyParagraphs: ["§ 151 Kollisjonsansvar"],
   },
@@ -291,16 +291,23 @@ function getAllTopics() {
  */
 function filterLaws(context, filterTopic = "all") {
   return LAWS.filter((law) => {
-    // Geografisk relevans
-    const geoMatch =
-      law.national ||
-      (context.isSeaArea && law.seaZone) ||
-      (context.isCoastal && law.coastal);
-
-    if (!geoMatch) return false;
-
     // Svalbard-spesifikke lover vises kun ved Svalbard
     if (law.region === "svalbard" && !context.isSvalbard) return false;
+
+    // Tre-trinns geografisk filtrering:
+    //   sjøareal  → alle maritime/kyst/nasjonale lover (~14 stk)
+    //   kystland  → kyst- og nasjonale lover, men ikke dyphavs-/offshorelover (~10 stk)
+    //   innland   → kun nasjonale lover (4 stk) – ikke aktuelt for Arendal-pilot
+    let geoMatch;
+    if (context.isSeaArea) {
+      geoMatch = law.national || law.seaZone || law.coastal;
+    } else if (context.isCoastal) {
+      geoMatch = law.national || law.coastal;
+    } else {
+      geoMatch = law.national;
+    }
+
+    if (!geoMatch) return false;
 
     // Temafilter
     if (filterTopic !== "all" && !law.topics.includes(filterTopic))
