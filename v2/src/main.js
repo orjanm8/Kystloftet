@@ -83,10 +83,14 @@ const map = new maplibregl.Map({
 });
 
 map.addControl(new maplibregl.NavigationControl(), 'top-right');
+map.addControl(new maplibregl.GeolocateControl({
+  positionOptions: { enableHighAccuracy: true },
+  trackUserLocation: false,
+  showAccuracyCircle: true,
+}), 'top-right');
 
 // ─── Markers (uten popup) ────────────────────────────────────────────────────
 let activeMarker = null;
-let posBtn = null;
 
 function placeMarker(lngLat, color) {
   if (activeMarker) activeMarker.remove();
@@ -112,30 +116,6 @@ async function doSearch(query) {
   }
 }
 
-function goToMyPosition() {
-  if (!navigator.geolocation) {
-    if (posBtn) posBtn.title = 'Geolokasjon støttes ikke av nettleseren';
-    return;
-  }
-  if (posBtn) { posBtn.disabled = true; posBtn.style.opacity = '0.5'; }
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      if (posBtn) { posBtn.disabled = false; posBtn.style.opacity = ''; posBtn.title = 'Min posisjon'; }
-      const lngLat = [pos.coords.longitude, pos.coords.latitude];
-      placeMarker(lngLat, '#dc2626');
-      map.flyTo({ center: lngLat, zoom: 14 });
-    },
-    err => {
-      if (posBtn) { posBtn.disabled = false; posBtn.style.opacity = ''; }
-      const msg = err.code === 1
-        ? 'Tilgang til posisjon ble avslått – sjekk nettleserinnstillingene'
-        : 'Kunne ikke hente posisjon';
-      if (posBtn) posBtn.title = msg;
-      console.warn('Geolokasjon feilet:', err.message);
-    },
-    { enableHighAccuracy: true, timeout: 10000 },
-  );
-}
 
 // ─── Stedsanalyse – sone OG kommune fra én Nominatim-forespørsel ──────────────
 // (ws.geonorge.no/kommuneinfo støtter ikke CORS fra nettleser)
@@ -1008,15 +988,8 @@ function buildSearchBar() {
     '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
   searchBtn.addEventListener('click', () => doSearch(input.value));
 
-  posBtn = document.createElement('button');
-  posBtn.title = 'Min posisjon';
-  posBtn.innerHTML =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
-  posBtn.addEventListener('click', goToMyPosition);
-
   wrap.appendChild(input);
   wrap.appendChild(searchBtn);
-  wrap.appendChild(posBtn);
   document.getElementById('map').appendChild(wrap);
 }
 
