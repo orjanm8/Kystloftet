@@ -83,11 +83,37 @@ const map = new maplibregl.Map({
 });
 
 map.addControl(new maplibregl.NavigationControl(), 'top-right');
-map.addControl(new maplibregl.GeolocateControl({
+
+const geolocateCtrl = new maplibregl.GeolocateControl({
   positionOptions: { enableHighAccuracy: true },
   trackUserLocation: false,
   showAccuracyCircle: true,
-}), 'top-right');
+});
+map.addControl(geolocateCtrl, 'top-right');
+geolocateCtrl.on('error', e => {
+  const msg = e.code === 1
+    ? 'Geolokasjon ble avslått. Gå til nettleserinnstillinger → Site Settings → Location og tillat for denne siden.'
+    : 'Kunne ikke hente posisjon: ' + e.message;
+  showMapNotice(msg);
+});
+
+function showMapNotice(text) {
+  let el = document.getElementById('map-notice');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'map-notice';
+    el.style.cssText =
+      'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);' +
+      'background:#1e293b;color:#f1f5f9;padding:10px 16px;border-radius:8px;' +
+      'font-size:13px;max-width:340px;text-align:center;z-index:100;' +
+      'box-shadow:0 4px 12px rgba(0,0,0,.4);';
+    document.getElementById('map').appendChild(el);
+  }
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
 
 // ─── Markers (uten popup) ────────────────────────────────────────────────────
 let activeMarker = null;
