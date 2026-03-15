@@ -703,20 +703,30 @@ function buildLayerSwitcher() {
   label.appendChild(cbLabel);
   wrap.appendChild(label);
 
-  // Geonorge Havnedata WMS (offisielle kaidata fra Kartverket)
-  const havneLabel = document.createElement('label');
-  havneLabel.className = 'harbour-toggle';
-  const havneCb = document.createElement('input');
-  havneCb.type = 'checkbox';
-  havneCb.id = 'havnedata-cb';
-  havneCb.addEventListener('change', e => {
-    map.setLayoutProperty('havnedata-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+  // Geonorge Havnedata – alle lag
+  const sep2 = document.createElement('span');
+  sep2.className = 'layer-sep';
+  wrap.appendChild(sep2);
+
+  [
+    { id: 'havnedata-cb',  layerId: 'havnedata-layer', label: '🗺 Havnedata (alle lag)' },
+    { id: 'admhavn-cb',    layerId: 'admhavn-layer',   label: '🟦 Adm. havneområde' },
+    { id: 'farts-cb',      layerId: 'farts-layer',     label: '⚡ Fartsrestriksjoner' },
+  ].forEach(({ id, layerId, label }) => {
+    const lbl = document.createElement('label');
+    lbl.className = 'harbour-toggle';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = id;
+    cb.addEventListener('change', e => {
+      map.setLayoutProperty(layerId, 'visibility', e.target.checked ? 'visible' : 'none');
+    });
+    const span = document.createElement('span');
+    span.textContent = label;
+    lbl.appendChild(cb);
+    lbl.appendChild(span);
+    wrap.appendChild(lbl);
   });
-  const havneCbLabel = document.createElement('span');
-  havneCbLabel.textContent = '🗺 Havnedata (Kartverket)';
-  havneLabel.appendChild(havneCb);
-  havneLabel.appendChild(havneCbLabel);
-  wrap.appendChild(havneLabel);
 
   document.getElementById('map').appendChild(wrap);
 }
@@ -779,17 +789,16 @@ map.on('load', () => {
   map.addLayer({ id: 'draw-outline-layer', type: 'line', source: 'draw-fill', paint: { 'line-color': '#2563eb', 'line-width': 2 } });
   map.addLayer({ id: 'draw-line-layer', type: 'line', source: 'draw-line', paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [4, 3] } });
 
-  // Geonorge Havnedata WMS-lag (offisielle havne- og kaidata fra Kystverket/Kartverket)
+  // Geonorge Havnedata WMS – alle lag (Kystverket/Kartverket, versjon 1.3.0)
+  const HAVNEDATA_BASE =
+    'https://wms.geonorge.no/skwms1/wms.havnedata?' +
+    'SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap' +
+    '&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857' +
+    '&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}';
+
   map.addSource('havnedata-wms', {
     type: 'raster',
-    tiles: [
-      'https://wms.geonorge.no/skwms1/wms.havnedata?' +
-      'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
-      '&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857' +
-      '&LAYERS=Havnedata' +
-      '&WIDTH={width}&HEIGHT={height}' +
-      '&BBOX={bbox-epsg-3857}',
-    ],
+    tiles: [`${HAVNEDATA_BASE}&LAYERS=havnedata`],
     tileSize: 256,
     attribution: '© <a href="https://kartverket.no">Kartverket / Kystverket – Havnedata</a>',
   });
@@ -798,7 +807,37 @@ map.on('load', () => {
     type: 'raster',
     source: 'havnedata-wms',
     layout: { visibility: 'none' },
-    paint: { 'raster-opacity': 0.9 },
+    paint: { 'raster-opacity': 0.85 },
+  });
+
+  // Administrativt havneområde – polygonlag, synlig i alle zoom-nivåer
+  map.addSource('admhavn-wms', {
+    type: 'raster',
+    tiles: [`${HAVNEDATA_BASE}&LAYERS=administrativthavneomrade`],
+    tileSize: 256,
+    attribution: '© <a href="https://kartverket.no">Kartverket – Administrativt havneområde</a>',
+  });
+  map.addLayer({
+    id: 'admhavn-layer',
+    type: 'raster',
+    source: 'admhavn-wms',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.7 },
+  });
+
+  // Fartsrestriksjoner (synlig opp til 1:100 000)
+  map.addSource('farts-wms', {
+    type: 'raster',
+    tiles: [`${HAVNEDATA_BASE}&LAYERS=fartsrestriksjoner`],
+    tileSize: 256,
+    attribution: '© <a href="https://kartverket.no">Kartverket – Fartsrestriksjoner</a>',
+  });
+  map.addLayer({
+    id: 'farts-layer',
+    type: 'raster',
+    source: 'farts-wms',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.85 },
   });
 
   // Havner og kaier-lag
