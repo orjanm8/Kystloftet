@@ -502,7 +502,6 @@ html, body {
   border: 1px solid var(--fill-3);
   border-radius: var(--radius);
   background: var(--fill-1);
-  cursor: pointer;
   transition: box-shadow .15s;
   overflow: hidden;
 }
@@ -515,7 +514,18 @@ html, body {
   justify-content: space-between;
   padding: 11px 14px 10px;
   gap: 8px;
+  cursor: pointer;   /* klikk kun på header for toggle */
+  user-select: none;
 }
+.info-panel-hdr:hover { background: var(--fill-2); }
+
+/* Chevron roterer ved expand */
+.panel-chevron {
+  flex-shrink: 0;
+  color: var(--ink-3);
+  transition: transform .2s ease;
+}
+.info-panel.expanded .panel-chevron { transform: rotate(180deg); }
 .info-panel-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
 .info-panel-meta { flex: 1; min-width: 0; }
 .info-panel-title { font-size: 13.5px; font-weight: 600; color: var(--ink-1); line-height: 1.2; }
@@ -729,6 +739,75 @@ html, body {
 /* ─── UTILITY ───────────────────────────────────────────────────── */
 
 .hidden { display: none !important; }
+
+/* ─── GPS-POSISJONSPRIKK ─────────────────────────────────────────── */
+
+/* Leaflet setter display:block på divIcon – nulstill for absolutt posisjonering */
+.location-marker-icon {
+  background: none !important;
+  border: none !important;
+  position: relative;
+}
+
+.loc-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  z-index: 2;
+}
+
+.loc-pulse {
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 113, 227, .25);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: loc-pulse 2.2s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes loc-pulse {
+  0%   { transform: translate(-50%,-50%) scale(.4); opacity: 1; }
+  80%  { opacity: .2; }
+  100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+}
+
+/* Animasjon på locate-knappen mens GPS-søket pågår */
+#btn-locate.locating { animation: btn-spin .8s linear infinite; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* ─── CORS-ADVARSEL (file:// protokoll) ─────────────────────────── */
+
+#cors-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: #7c3a00;
+  color: #fff;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  padding: 10px 18px;
+  line-height: 1.6;
+}
+#cors-banner code {
+  background: rgba(255,255,255,.18);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: "SF Mono", "Menlo", monospace;
+}
+#cors-banner a { color: #7dd3fc; }
 
 /* ─── RESPONSIV ─────────────────────────────────────────────────── */
 

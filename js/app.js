@@ -26,6 +26,27 @@ const GEONORGE_PUNKT_URL =
 const NOMINATIM_REVERSE_URL =
   "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=16";
 
+// ─── CORS / LOKAL KJØRING ────────────────────────────────────────────────────
+// Løsningen bruker eksterne API-er (Nominatim, Geonorge) som krever HTTP(S).
+// Åpner du index.html direkte som fil:// blokkerer nettleseren disse kallene.
+// Kjør alltid via en lokal HTTP-server:
+//   npx serve .          (krever Node.js)
+//   python3 -m http.server 8080
+// Åpne deretter http://localhost:8080 i nettleseren.
+
+(function detectFileProtocol() {
+  if (location.protocol !== "file:") return;
+  const banner = document.createElement("div");
+  banner.id = "cors-banner";
+  banner.innerHTML = `
+    <strong>⚠️ Åpnet som fil</strong> – eksterne kart-API-er vil ikke fungere.
+    Start en lokal server i samme mappe:<br>
+    <code>python3 -m http.server 8080</code>&ensp;→&ensp;åpne
+    <a href="http://localhost:8080" target="_blank">http://localhost:8080</a>
+    <button onclick="this.parentElement.remove()" style="float:right;background:none;border:none;cursor:pointer;font-size:16px;color:inherit">✕</button>`;
+  document.body.prepend(banner);
+})();
+
 // ─── KART INITIALISERING ─────────────────────────────────────────────────────
 
 const map = L.map("map", {
@@ -178,19 +199,38 @@ document.addEventListener("click", (e) => {
 
 // ─── MIN POSISJON ─────────────────────────────────────────────────────────────
 
+let locationMarker = null;
+
 document.getElementById("btn-locate").addEventListener("click", () => {
   if (!navigator.geolocation) return;
   const btn = document.getElementById("btn-locate");
-  btn.style.opacity = "0.5";
+  btn.classList.add("locating");
+
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      btn.style.opacity = "";
-      map.flyTo([pos.coords.latitude, pos.coords.longitude], 15, { duration: 1.5 });
+      btn.classList.remove("locating");
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      map.flyTo([lat, lon], 15, { duration: 1.5 });
+
+      // Fjern gammel markør og vis ny pulserende prikk
+      if (locationMarker) map.removeLayer(locationMarker);
+      const icon = L.divIcon({
+        className: "location-marker-icon",
+        html: `<div class="loc-pulse"></div><div class="loc-dot"></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+      locationMarker = L.marker([lat, lon], { icon, zIndexOffset: 500 })
+        .bindTooltip("Din posisjon", { direction: "top", offset: [0, -10] })
+        .addTo(map);
     },
-    () => {
-      btn.style.opacity = "";
+    (err) => {
+      btn.classList.remove("locating");
+      console.warn("Posisjon ikke tilgjengelig:", err.message);
     },
-    { timeout: 8000 }
+    { timeout: 10000, enableHighAccuracy: true }
   );
 });
 
@@ -611,6 +651,7 @@ function renderArendalPanel(context) {
         <div class="info-panel-sub">${isSea ? "Sjøareal og havneplan" : "Arealplan og regulering"}</div>
       </div>
       <span class="info-panel-tag tag-land">Arendal</span>
+      <svg class="panel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="info-panel-body">
       <p>${isSea
@@ -624,7 +665,10 @@ function renderArendalPanel(context) {
       </div>
     </div>`;
 
-  el.onclick = () => el.classList.toggle("expanded");
+  // Toggle KUN ved klikk på headeren – ikke på lenker i body
+  el.querySelector(".info-panel-hdr").addEventListener("click", () =>
+    el.classList.toggle("expanded")
+  );
 }
 
 // ─── VERKTØYKASSE: HAVBUNNDATA (MAREANO) ────────────────────────────────────
@@ -646,6 +690,7 @@ function renderMAREANOPanel(context) {
         <div class="info-panel-sub">Bunntype, sedimenter og dybde</div>
       </div>
       <span class="info-panel-tag tag-data">Kartdata</span>
+      <svg class="panel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     <div class="info-panel-body">
       <p>MAREANO kartlegger havbunnen i norske farvann med hensyn til geologi, biologi og kjemi. Data fra Skagerrak og Sørlandskysten er tilgjengelig og dekker Arendal-området.</p>
@@ -664,7 +709,10 @@ function renderMAREANOPanel(context) {
       </div>
     </div>`;
 
-  el.onclick = () => el.classList.toggle("expanded");
+  // Toggle KUN ved klikk på headeren – ikke på lenker i body
+  el.querySelector(".info-panel-hdr").addEventListener("click", () =>
+    el.classList.toggle("expanded")
+  );
 }
 
 // ─── FILTER-KNAPPER ──────────────────────────────────────────────────────────
