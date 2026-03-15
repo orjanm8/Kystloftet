@@ -2,8 +2,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
 import { LAWS, ZONE_LABELS, filterLawsByZone, countLaws } from './laws.js';
-
-// (Statiske kommunedokumenter er erstattet med dynamisk oppslag – se fetchMunicipalityInfo)
+import { finnKommunePlaner } from './kommuneplaner.js';
 
 // ─── Base layers ─────────────────────────────────────────────────────────────
 const BASE_LAYERS = {
@@ -256,118 +255,83 @@ async function hentKommunenummer(lat, lon) {
   }
 }
 
-// Henter faktiske planer fra arealplaner.no sitt åpne API
-// Prøver CORS direkte først, deretter via proxy
-async function hentArealplanerData(kommunenummer) {
-  const apiUrl =
-    `https://www.arealplaner.no/api/arealplaner` +
-    `?kommunenummer=${kommunenummer}&antall=100`;
 
-  // Prøv direkte (fungerer hvis arealplaner.no har CORS-header)
-  for (const hent of [
-    () => fetch(apiUrl, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.text() : null).catch(() => null),
-    () => hentViaProxy(apiUrl),
-  ]) {
-    const tekst = await hent();
-    if (!tekst) continue;
-    try {
-      const data = JSON.parse(tekst);
-      const liste = Array.isArray(data) ? data
-        : data.planer ?? data.results ?? data.items ?? [];
-      if (liste.length > 0) return liste;
-    } catch { /* neste forsøk */ }
-  }
-  return null;
-}
-
-// Plan-typer i SOSI-standard
-const PLAN_TYPENAVN = {
-  '20': 'Kommuneplanens arealdel',
-  '21': 'Kommunedelplan (arealdel)',
-  '22': 'Kommunedelplan (samfunnsdel)',
-  '30': 'Detaljreguleringsplan',
-  '35': 'Områdereguleringsplan',
-  '11': 'Kommuneplanens samfunnsdel',
-};
-
-// Nøkkelord som tyder på kyst-/sjørelevans
-const KYST_ORD = [
-  'sjø', 'sjøareal', 'hav', 'havn', 'havbruk', 'kyst', 'kystsone',
-  'kystplan', 'strandsone', 'akvakultur', 'fiskeri', 'brygge', 'molo',
-  'småbåt', 'båthavn', 'marin', 'maritim', 'sjøfront', 'havneplan',
-];
-
-function erKystPlan(plan) {
-  const t = ((plan.planNavn || plan.navn || plan.title || '') +
-    ' ' + (plan.planType || '')).toLowerCase();
-  return KYST_ORD.some(kw => t.includes(kw));
-}
-
-function lagArealplanLenker(kommunenummer, navn, planer) {
-  // Grupper planer
-  const arealplaner = planer.filter(p =>
-    ['20', '21'].includes(String(p.planType ?? p.plantype ?? '')));
-  const kystplaner = planer.filter(erKystPlan);
-
-  const tilDoc = (p, baseNr) => {
-    const planId = p.planId ?? p.id ?? '';
-    const planNavn = p.planNavn ?? p.navn ?? p.title ?? `Plan ${planId}`;
-    const typeNavn = PLAN_TYPENAVN[String(p.planType ?? p.plantype ?? '')] ?? '';
-    return {
-      name: planNavn,
-      desc: typeNavn ? `${typeNavn} · arealplaner.no` : 'arealplaner.no',
-      url: planId
-        ? `https://www.arealplaner.no/${baseNr}/arealplaner/${planId}`
-        : `https://www.arealplaner.no/${baseNr}/arealplaner`,
-      type: 'link',
-    };
+function buildKommunePanel(container, navn, county, kuratert, kommunenummer, lat, lon, isCoastal) {
+  const KAT_TITTEL = {
+    arealplan: `${navn} – Kommuneplan og arealdel`,
+    sjø:       `${navn} – Sjø, havn og kyst`,
+    regulering:`${navn} – Reguleringsplaner`,
+    kart:      `${navn} – Kart og innsynsverktøy`,
   };
 
-  const seksjoner = [];
-
-  if (arealplaner.length > 0) {
-    seksjoner.push(buildDocSection(
-      `${navn} – Kommuneplan og arealdel`,
-      arealplaner.slice(0, 8).map(p => tilDoc(p, kommunenummer)),
-    ));
-  }
-
-  if (kystplaner.length > 0) {
-    seksjoner.push(buildDocSection(
-      `${navn} – Sjø, kyst og havbruk`,
-      kystplaner.slice(0, 8).map(p => tilDoc(p, kommunenummer)),
-    ));
-  }
-
-  // Alle planer (lenke til portal)
-  if (seksjoner.length === 0) {
-    seksjoner.push(buildDocSection(`${navn} – Alle planer (arealplaner.no)`, [
+  if (kuratert) {
+    // ── Kuraterte lenker fra kommunens egne nettsider ─────────────────────
+    const grupper = {};
+    for (const plan of kuratert.planer) {
+      (grupper[plan.kat] ??= []).push(plan);
+    }
+    for (const kat of ['arealplan', 'sjø', 'regulering', 'kart']) {
+      if (grupper[kat]?.length) {
+        container.appendChild(buildDocSection(KAT_TITTEL[kat], grupper[kat]));
+      }
+    }
+  } else if (kommunenummer) {
+    // ── Fallback: presise lenker til arealplaner.no med kommunenummer ─────
+    container.appendChild(buildDocSection(`${navn} – Planportaler`, [
       {
-        name: `Se alle planer for ${navn} på arealplaner.no`,
-        desc: `Gjeldende kommuneplan, reguleringsplaner og kommunedelplaner`,
+        name: `Kommuneplanens arealdel – ${navn}`,
+        desc: 'Gjeldende arealdel med planbestemmelser og plankart (arealplaner.no)',
         url: `https://www.arealplaner.no/${kommunenummer}/arealplaner`,
+        type: 'link',
+      },
+      {
+        name: `Kommunekart – ${navn}`,
+        desc: 'Kartbasert innsynsløsning med alle reguleringsplaner og arealformål',
+        url: `https://kommunekart.com/?urlParams=${municipalitySlug(navn)}`,
         type: 'link',
       },
     ]));
   } else {
-    // Legg til portal-lenke i bunnen uansett
-    seksjoner.push(buildDocSection(`${navn} – Alle planer`, [
+    // ── Siste fallback: navnebasert ───────────────────────────────────────
+    container.appendChild(buildDocSection(`${navn} – Planportaler`, [
       {
-        name: `Alle planer for ${navn} på arealplaner.no`,
-        desc: `Komplett oversikt over alle gjeldende planer i kommunen`,
-        url: `https://www.arealplaner.no/${kommunenummer}/arealplaner`,
+        name: `${navn} kommunes planside`,
+        desc: 'Kommuneplaner, reguleringsplaner og arealplaner på kommunens nettsted',
+        url: `https://www.${municipalitySlug(navn)}.kommune.no/`,
         type: 'link',
       },
       {
-        name: `Kommunekart – planvisning for ${navn}`,
-        desc: `Kartbasert planinnsynsløsning med reguleringsplaner og arealformål`,
+        name: `Kommunekart – ${navn}`,
+        desc: 'Kartbasert innsynsløsning med alle reguleringsplaner og arealformål',
         url: `https://kommunekart.com/?urlParams=${municipalitySlug(navn)}`,
         type: 'link',
       },
     ]));
   }
 
-  return seksjoner;
+  // ── Sjø og kyst – nasjonale ressurser (alltid ved coastal/sea) ───────────
+  if (isCoastal) {
+    container.appendChild(buildDocSection(`${navn} – Sjø og kyst (nasjonalt)`, [
+      {
+        name: 'Fiskeridirektoratets kart – akvakultur og fiskeri',
+        desc: 'Oppdrettslokaliteter, akvakulturtillatelser, fiskerigrenser og marine data',
+        url: 'https://kart.fiskeridir.no/',
+        type: 'link',
+      },
+      {
+        name: 'Havbruksdata.no – akvakulturregister',
+        desc: 'Oversikt over alle oppdrettslokaliteter langs kysten med tillatelser',
+        url: 'https://www.havbruksdata.no/',
+        type: 'link',
+      },
+      {
+        name: 'Geonorge kart – dette området',
+        desc: 'Nasjonalt planregister sentrert på polygonets posisjon',
+        url: `https://www.geonorge.no/kart/?zoom=12&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
+        type: 'link',
+      },
+    ]));
+  }
 }
 
 async function buildDynamicDocPanel(container, municipality, zone, centroid) {
@@ -377,7 +341,6 @@ async function buildDynamicDocPanel(container, municipality, zone, centroid) {
   const isSea = zone === 'sea';
   const isCoastal = zone === 'coastal' || zone === 'sea';
 
-  // ── Kommuneseksjon ────────────────────────────────────────────────────────
   if (!municipality || !municipality.kommunenavnNorsk) {
     const p = document.createElement('p');
     p.className = 'law-intro';
@@ -393,98 +356,31 @@ async function buildDynamicDocPanel(container, municipality, zone, centroid) {
     intro.innerHTML = `Plandokumenter for <strong>${navn} kommune</strong>${county ? ` · ${county}` : ''}.`;
     container.appendChild(intro);
 
-    // Lasteindikator
-    const loadingEl = document.createElement('div');
-    loadingEl.className = 'doc-loading-section';
-    loadingEl.innerHTML = `
-      <div class="doc-loading-row">
-        <span class="doc-spinner"></span>
-        Henter plandata fra Kartverket og arealplaner.no…
-      </div>`;
-    container.appendChild(loadingEl);
+    // Sjekk kuratert database først (ingen nettverkskall)
+    const kuratert = finnKommunePlaner(navn);
 
-    // Hent kommunenummer og plandata parallelt
-    const [kommunenummer, arealplanerRaa] = await Promise.all([
-      hentKommunenummer(lat, lon),
-      null, // plasseholder – vi trenger kommunenummer først
-    ]);
-
-    let planSeksjoner = [];
-
-    if (kommunenummer) {
-      const planer = await hentArealplanerData(kommunenummer);
-      if (planer && planer.length > 0) {
-        planSeksjoner = lagArealplanLenker(kommunenummer, navn, planer);
-      } else {
-        // API ga ikke svar – legg til gode portal-lenker direkte
-        planSeksjoner = [buildDocSection(`${navn} – Planportaler`, [
-          {
-            name: `Kommuneplanens arealdel – ${navn} (arealplaner.no)`,
-            desc: 'Gjeldende arealdel med planbestemmelser og plankart for kommunen',
-            url: `https://www.arealplaner.no/${kommunenummer}/arealplaner`,
-            type: 'link',
-          },
-          {
-            name: `Kommunekart – ${navn}`,
-            desc: 'Kartbasert innsynsløsning med alle reguleringsplaner og arealformål',
-            url: `https://kommunekart.com/?urlParams=${municipalitySlug(navn)}`,
-            type: 'link',
-          },
-          {
-            name: `eInnsyn – ${navn} (planer og vedtak)`,
-            desc: 'Søk i offentlig postjournal for planer, høringsuttalelser og vedtak',
-            url: `https://einnsyn.no/search?q=${encodeURIComponent(navn + ' arealplan')}`,
-            type: 'link',
-          },
-        ])];
-      }
+    if (kuratert) {
+      // Kjent kommune – vis kuraterte lenker direkte
+      buildKommunePanel(container, navn, county, kuratert, null, lat, lon, isCoastal);
     } else {
-      // Kommunenummer ikke tilgjengelig – navnebasert fallback
-      planSeksjoner = [buildDocSection(`${navn} – Planportaler`, [
-        {
-          name: `Søk ${navn} på arealplaner.no`,
-          desc: 'Nasjonalt planregister med kommuneplaner og reguleringsplaner',
-          url: `https://www.arealplaner.no/kommuner`,
-          type: 'link',
-        },
-        {
-          name: `Kommunekart – ${navn}`,
-          desc: 'Kartbasert innsynsløsning med alle reguleringsplaner og arealformål',
-          url: `https://kommunekart.com/?urlParams=${municipalitySlug(navn)}`,
-          type: 'link',
-        },
-      ])];
-    }
+      // Ukjent kommune – hent kommunenummer fra Kartverket
+      const loadingEl = document.createElement('div');
+      loadingEl.className = 'doc-loading-section';
+      loadingEl.innerHTML = `
+        <div class="doc-loading-row">
+          <span class="doc-spinner"></span>
+          Henter kommunenummer fra Kartverket…
+        </div>`;
+      container.appendChild(loadingEl);
 
-    loadingEl.remove();
-    planSeksjoner.forEach(s => container.appendChild(s));
+      const kommunenummer = await hentKommunenummer(lat, lon);
+      loadingEl.remove();
 
-    // Sjø og kyst-ressurser – alltid vist ved coastal/sea
-    if (isCoastal) {
-      container.appendChild(buildDocSection(`${navn} – Sjø og kyst`, [
-        {
-          name: 'Fiskeridirektoratets kart – akvakultur og fiskeri',
-          desc: 'Oppdrettslokaliteter, akvakulturtillatelser og fiskerigrenser',
-          url: 'https://kart.fiskeridir.no/',
-          type: 'link',
-        },
-        {
-          name: 'Havbruksdata.no – akvakulturregister',
-          desc: 'Oversikt over alle oppdrettslokaliteter langs kysten',
-          url: 'https://www.havbruksdata.no/',
-          type: 'link',
-        },
-        {
-          name: `Geonorge kart – dette området`,
-          desc: 'Nasjonalt planregister sentrert på polygonets posisjon',
-          url: `https://www.geonorge.no/kart/?zoom=12&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
-          type: 'link',
-        },
-      ]));
+      buildKommunePanel(container, navn, county, null, kommunenummer, lat, lon, isCoastal);
     }
   }
 
-  // ── Nasjonale ressurser ───────────────────────────────────────────────────
+  // ── Nasjonale registre (alltid vist) ─────────────────────────────────────
   container.appendChild(buildDocSection('Nasjonale registre', [
     {
       name: 'Miljødirektoratets naturbase',
