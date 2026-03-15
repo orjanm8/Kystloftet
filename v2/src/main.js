@@ -46,9 +46,11 @@ const kystverketWMS =
 
 // ─── WMS GetFeatureInfo – lag som kan forespørres ────────────────────────────
 const WMS_QUERYABLE = [
-  { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',            layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
-  { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
-  { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata', layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
+  { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',                                                      layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
+  { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
+  { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
+  { layerId: 'akva-layer',       wmsUrl: 'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer',       layer: '0',                         label: 'Akvakulturlokaliteter',     infoFormat: 'text/html' },
+  { layerId: 'vern-layer',       wmsUrl: 'https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer',             layer: 'naturvern_omrade',          label: 'Naturvernområder',          infoFormat: 'application/geo+json' },
 ];
 
 // ─── Map (sentrert på Arendal / Aust-Agder) ───────────────────────────────────
@@ -558,7 +560,7 @@ function lngLatToMercator(lng, lat) {
   return [x, y];
 }
 
-function buildGetFeatureInfoUrl(wmsUrl, layerName, bounds, size, pt) {
+function buildGetFeatureInfoUrl(wmsUrl, layerName, bounds, size, pt, infoFormat = 'application/json') {
   const [west, south] = lngLatToMercator(bounds.getWest(), bounds.getSouth());
   const [east, north] = lngLatToMercator(bounds.getEast(), bounds.getNorth());
   return (
@@ -566,8 +568,18 @@ function buildGetFeatureInfoUrl(wmsUrl, layerName, bounds, size, pt) {
     `&LAYERS=${encodeURIComponent(layerName)}&QUERY_LAYERS=${encodeURIComponent(layerName)}` +
     `&SRS=EPSG:3857&BBOX=${west},${south},${east},${north}` +
     `&WIDTH=${size.w}&HEIGHT=${size.h}&X=${Math.round(pt.x)}&Y=${Math.round(pt.y)}` +
-    `&INFO_FORMAT=application%2Fjson&FEATURE_COUNT=5`
+    `&INFO_FORMAT=${encodeURIComponent(infoFormat)}&FEATURE_COUNT=5`
   );
+}
+
+function extractHtmlBody(html) {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, link').forEach(el => el.remove());
+    const text = doc.body.textContent.trim();
+    if (!text || text.length < 3) return null;
+    return doc.body.innerHTML;
+  } catch { return null; }
 }
 
 function renderWmsProperties(props) {
@@ -598,38 +610,49 @@ async function queryWmsFeatureInfo(e) {
   const results = await Promise.all(
     visibleLayers.map(async cfg => {
       try {
-        const url = buildGetFeatureInfoUrl(cfg.wmsUrl, cfg.layer, bounds, size, e.point);
+        const fmt = cfg.infoFormat ?? 'application/json';
+        const url = buildGetFeatureInfoUrl(cfg.wmsUrl, cfg.layer, bounds, size, e.point, fmt);
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) return { ...cfg, features: [] };
+        if (!res.ok) return { ...cfg, features: [], html: null };
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('json')) {
           const data = await res.json();
-          return { ...cfg, features: data.features || [] };
+          return { ...cfg, features: data.features || [], html: null };
         }
-        return { ...cfg, features: [] };
+        if (ct.includes('html')) {
+          return { ...cfg, features: [], html: extractHtmlBody(await res.text()) };
+        }
+        return { ...cfg, features: [], html: null };
       } catch {
-        return { ...cfg, features: [] };
+        return { ...cfg, features: [], html: null };
       }
     }),
   );
 
-  const withData = results.filter(r => r.features.length > 0);
+  const withData = results.filter(r => r.features.length > 0 || r.html);
   if (!withData.length) {
     body.innerHTML = '<p class="wms-info-empty">Ingen kartinformasjon funnet på dette punktet.</p>';
     return;
   }
 
   body.innerHTML = '';
-  withData.forEach(({ label, features }) => {
+  withData.forEach(({ label, features, html }) => {
     const block = document.createElement('div');
     block.className = 'wms-layer-block';
     block.innerHTML = `<div class="wms-layer-name">${label}</div>`;
-    features.forEach(feat => {
+    if (html) {
       const el = document.createElement('div');
-      el.className = 'wms-feature';
-      el.innerHTML = renderWmsProperties(feat.properties || {});
+      el.className = 'wms-feature-html';
+      el.innerHTML = html;
       block.appendChild(el);
-    });
+    } else {
+      features.forEach(feat => {
+        const el = document.createElement('div');
+        el.className = 'wms-feature';
+        el.innerHTML = renderWmsProperties(feat.properties || {});
+        block.appendChild(el);
+      });
+    }
     body.appendChild(block);
   });
 }
@@ -930,6 +953,29 @@ function buildLayerSwitcher() {
     wrap.appendChild(lbl);
   });
 
+  const sep3 = document.createElement('span');
+  sep3.className = 'layer-sep';
+  wrap.appendChild(sep3);
+
+  [
+    { id: 'akva-cb', layerId: 'akva-layer', label: '🐟 Akvakulturlokaliteter' },
+    { id: 'vern-cb', layerId: 'vern-layer', label: '🌿 Naturvernområder' },
+  ].forEach(({ id, layerId, label }) => {
+    const lbl = document.createElement('label');
+    lbl.className = 'harbour-toggle';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = id;
+    cb.addEventListener('change', e => {
+      map.setLayoutProperty(layerId, 'visibility', e.target.checked ? 'visible' : 'none');
+    });
+    const span = document.createElement('span');
+    span.textContent = label;
+    lbl.appendChild(cb);
+    lbl.appendChild(span);
+    wrap.appendChild(lbl);
+  });
+
   document.getElementById('map').appendChild(wrap);
 }
 
@@ -1043,6 +1089,46 @@ map.on('load', () => {
     source: 'farts-wms',
     layout: { visibility: 'none' },
     paint: { 'raster-opacity': 0.85 },
+  });
+
+  // Akvakulturlokaliteter (Fiskeridirektoratet)
+  const AKVA_WMS_BASE =
+    'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer?' +
+    'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
+    '&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857' +
+    '&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}';
+  map.addSource('akva-wms', {
+    type: 'raster',
+    tiles: [`${AKVA_WMS_BASE}&LAYERS=0`],
+    tileSize: 256,
+    attribution: '© <a href="https://www.fiskeridir.no">Fiskeridirektoratet</a>',
+  });
+  map.addLayer({
+    id: 'akva-layer',
+    type: 'raster',
+    source: 'akva-wms',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.85 },
+  });
+
+  // Naturvernområder (Miljødirektoratet)
+  const VERN_WMS_BASE =
+    'https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer?' +
+    'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
+    '&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857' +
+    '&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}';
+  map.addSource('vern-wms', {
+    type: 'raster',
+    tiles: [`${VERN_WMS_BASE}&LAYERS=naturvern_omrade`],
+    tileSize: 256,
+    attribution: '© <a href="https://www.miljodirektoratet.no">Miljødirektoratet – Naturvernområder</a>',
+  });
+  map.addLayer({
+    id: 'vern-layer',
+    type: 'raster',
+    source: 'vern-wms',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.7 },
   });
 
   // Havner og kaier-lag
