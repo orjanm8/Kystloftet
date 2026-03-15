@@ -49,7 +49,7 @@ const WMS_QUERYABLE = [
   { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',                                                      layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
   { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
   { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
-  { layerId: 'akva-layer',       wmsUrl: 'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer',       layer: '0',                         label: 'Akvakulturlokaliteter',     infoFormat: 'text/html' },
+  { layerId: 'akva-layer',       wmsUrl: 'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer',       layer: 'akvakultur_lokaliteter',    label: 'Akvakulturlokaliteter',     infoFormat: 'text/html' },
   { layerId: 'vern-layer',       wmsUrl: 'https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer',             layer: 'naturvern_omrade',          label: 'Naturvernområder',          infoFormat: 'application/geo+json' },
 ];
 
@@ -86,6 +86,7 @@ map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
 // ─── Markers (uten popup) ────────────────────────────────────────────────────
 let activeMarker = null;
+let posBtn = null;
 
 function placeMarker(lngLat, color) {
   if (activeMarker) activeMarker.remove();
@@ -112,15 +113,27 @@ async function doSearch(query) {
 }
 
 function goToMyPosition() {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    if (posBtn) posBtn.title = 'Geolokasjon støttes ikke av nettleseren';
+    return;
+  }
+  if (posBtn) { posBtn.disabled = true; posBtn.style.opacity = '0.5'; }
   navigator.geolocation.getCurrentPosition(
     pos => {
+      if (posBtn) { posBtn.disabled = false; posBtn.style.opacity = ''; posBtn.title = 'Min posisjon'; }
       const lngLat = [pos.coords.longitude, pos.coords.latitude];
       placeMarker(lngLat, '#dc2626');
       map.flyTo({ center: lngLat, zoom: 14 });
     },
-    err => console.error('Geolokasjon feilet:', err),
-    { enableHighAccuracy: true },
+    err => {
+      if (posBtn) { posBtn.disabled = false; posBtn.style.opacity = ''; }
+      const msg = err.code === 1
+        ? 'Tilgang til posisjon ble avslått – sjekk nettleserinnstillingene'
+        : 'Kunne ikke hente posisjon';
+      if (posBtn) posBtn.title = msg;
+      console.warn('Geolokasjon feilet:', err.message);
+    },
+    { enableHighAccuracy: true, timeout: 10000 },
   );
 }
 
@@ -995,7 +1008,7 @@ function buildSearchBar() {
     '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
   searchBtn.addEventListener('click', () => doSearch(input.value));
 
-  const posBtn = document.createElement('button');
+  posBtn = document.createElement('button');
   posBtn.title = 'Min posisjon';
   posBtn.innerHTML =
     '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>';
@@ -1099,7 +1112,7 @@ map.on('load', () => {
     '&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}';
   map.addSource('akva-wms', {
     type: 'raster',
-    tiles: [`${AKVA_WMS_BASE}&LAYERS=0`],
+    tiles: [`${AKVA_WMS_BASE}&LAYERS=akvakultur_lokaliteter`],
     tileSize: 256,
     attribution: '© <a href="https://www.fiskeridir.no">Fiskeridirektoratet</a>',
   });
