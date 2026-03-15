@@ -3,125 +3,7 @@ import './style.css';
 import maplibregl from 'maplibre-gl';
 import { LAWS, ZONE_LABELS, filterLawsByZone, countLaws } from './laws.js';
 
-// ─── Kommunedokumenter – Arendal ─────────────────────────────────────────────
-const MUNICIPAL_DOCS = [
-  {
-    title: 'Kommuneplanens arealdel 2023–2033',
-    docs: [
-      {
-        name: 'Kommuneplanens arealdel',
-        desc: 'Overordnet plan for arealbruk i Arendal, inkl. sjøarealer og strandsone',
-        url: 'https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/arealdel/',
-        type: 'link',
-      },
-      {
-        name: 'Planbestemmelser (PDF)',
-        desc: 'Juridisk bindende bestemmelser – Kommuneplanens arealdel 2023–2033',
-        url: 'https://www.arendal.kommune.no/_f/p1/i5917f255-7513-4b25-97a8-34659f731ff4/vedlegg-2-kommuneplanbestemmelser-januar-2023-27012023.pdf',
-        type: 'pdf',
-      },
-      {
-        name: 'Planbeskrivelse 2023–2033 (PDF)',
-        desc: 'Beskrivelse av planens innhold, vurderinger og konsekvenser',
-        url: 'https://www.arendal.kommune.no/_f/p1/i4bf2f64d-bba0-4be8-a20f-e981b90a3def/planbeskrivelse-2023-2033-ny-horing-justert-etter-vedtak-25januar-2023.pdf',
-        type: 'pdf',
-      },
-      {
-        name: 'Arealstrategier (PDF)',
-        desc: 'Forslag til arealstrategier for Arendal kommune',
-        url: 'https://www.arendal.kommune.no/_f/p1/i7802d02f-55bc-45cb-9819-8d71e0da3168/kommuneplan-arealdel-forslag-til-arealstrategier-arendal-kommune.pdf',
-        type: 'pdf',
-      },
-      {
-        name: 'Revisjon av arealdelen (pågående)',
-        desc: 'Informasjon om pågående revisjonsarbeid av kommuneplanens arealdel',
-        url: 'https://www.arendal.kommune.no/politikk-og-medvirkning/kommunens-planer/ny-kommuneplan-revisjon-av-kommuneplanens-arealdel/',
-        type: 'link',
-      },
-    ],
-  },
-  {
-    title: 'Kommunedelplaner',
-    docs: [
-      {
-        name: 'Kommunedelplan for småbåthavner',
-        desc: 'Plan for småbåthavner og uthavner i Arendal kommune',
-        url: 'https://www.arendal.kommune.no/politikk-og-organisasjon/kommuneplan-planer-og-styringsdokumenter/kommunedelplaner/smabathavner/',
-        type: 'link',
-      },
-      {
-        name: 'Kommunedelplan småbåthavner 2010–2020 (PDF)',
-        desc: 'Gjeldende kommunedelplan for småbåthavner med bestemmelser',
-        url: 'https://www.arendal.kommune.no/_f/p1/iac3d68a9-5dc5-41d8-83b8-833dd001c559/Kommunedelplan_smaabaathavner_2010-2020.pdf',
-        type: 'pdf',
-      },
-      {
-        name: 'Alle kommunedelplaner',
-        desc: 'Oversikt over alle kommunedelplaner i Arendal',
-        url: 'https://www.arendal.kommune.no/politikk-og-organisasjon/kommuneplan-planer-og-styringsdokumenter/kommunedelplaner/',
-        type: 'link',
-      },
-    ],
-  },
-  {
-    title: 'Reguleringsplaner (sjø og kyst)',
-    docs: [
-      {
-        name: 'Arendal havn – reguleringsplan',
-        desc: 'Vedtatt reguleringsplan for Arendal havn',
-        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/arendal-havn-del-av.22121.aspx',
-        type: 'link',
-      },
-      {
-        name: 'Innseiling Arendal (under arbeid)',
-        desc: 'Reguleringsplan for innseiling til Arendal – pågående planarbeid',
-        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/reguleringsplaner-under-arbeid/innseiling-arendal.26864.aspx',
-        type: 'link',
-      },
-      {
-        name: 'Paddelandet småbåthavn',
-        desc: 'Vedtatt reguleringsplan for Paddelandet småbåthavn',
-        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/paddelandet-smabathavn.8621.aspx',
-        type: 'link',
-      },
-      {
-        name: 'Alle vedtatte reguleringsplaner',
-        desc: 'Søk i alle vedtatte reguleringsplaner i Arendal kommune',
-        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/reguleringsplaner/vedtatte-reguleringsplaner/',
-        type: 'link',
-      },
-    ],
-  },
-  {
-    title: 'Kart og eiendomsinformasjon',
-    docs: [
-      {
-        name: 'Eiendomsinformasjon og kart – Arendal',
-        desc: 'Kommunens karttjenester, eiendomsdata og arealformål',
-        url: 'https://www.arendal.kommune.no/tjenester/plan-bygg-og-eiendom/eiendomsinformasjon-og-kart/',
-        type: 'link',
-      },
-      {
-        name: 'Geonorge – nasjonale arealdata',
-        desc: 'Kartverkets portal for arealplaner, geografiske data og WMS-tjenester',
-        url: 'https://www.geonorge.no/',
-        type: 'link',
-      },
-      {
-        name: 'Fiskeridirektoratets kart',
-        desc: 'Akvakulturlokaliteter, fiskerigrenser og marine sjødata',
-        url: 'https://kart.fiskeridir.no/',
-        type: 'link',
-      },
-      {
-        name: 'Miljødirektoratets naturbase',
-        desc: 'Verneområder, marine reservater og naturverdier langs kysten',
-        url: 'https://naturbase.no/',
-        type: 'link',
-      },
-    ],
-  },
-];
+// (Statiske kommunedokumenter er erstattet med dynamisk oppslag – se fetchMunicipalityInfo)
 
 // ─── Base layers ─────────────────────────────────────────────────────────────
 const BASE_LAYERS = {
@@ -268,6 +150,139 @@ async function detectZone(centroid) {
   }
 }
 
+// ─── Kommuneoppslag – Kartverket ──────────────────────────────────────────────
+async function fetchMunicipalityInfo(lng, lat) {
+  try {
+    const res = await fetch(
+      `https://ws.geonorge.no/kommuneinfo/v1/punkt?nord=${lat}&ost=${lng}&koordsys=4326`,
+      { signal: AbortSignal.timeout(7000) },
+    );
+    if (!res.ok) return null;
+    return await res.json();
+    // Returns { kommunenummer, kommunenavnNorsk, fylkesnummer, fylkesnavnNorsk, ... }
+  } catch {
+    return null;
+  }
+}
+
+// Konverter kommunenavn til enkel URL-slug (æ→ae, ø→o, å→a, mellomrom fjernes)
+function municipalitySlug(name) {
+  return name
+    .toLowerCase()
+    .replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'a')
+    .replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
+}
+
+// ─── Dynamisk Plandokumenter-panel ───────────────────────────────────────────
+function buildDocSection(title, docs) {
+  const details = document.createElement('details');
+  details.className = 'law-category';
+  details.open = true;
+
+  const summary = document.createElement('summary');
+  summary.className = 'law-category-header';
+  summary.innerHTML = `<span>📂</span><span>${title}</span>`;
+  details.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'law-category-body';
+
+  docs.forEach(doc => {
+    const item = document.createElement('div');
+    item.className = 'doc-item';
+
+    const link = document.createElement('a');
+    link.href = doc.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.className = `doc-link${doc.type === 'pdf' ? ' doc-pdf' : ''}`;
+    const icon = doc.type === 'pdf'
+      ? '<span class="doc-type-badge">PDF</span>'
+      : '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+    link.innerHTML = `${doc.name} ${icon}`;
+
+    const desc = document.createElement('p');
+    desc.className = 'doc-desc';
+    desc.textContent = doc.desc;
+
+    item.appendChild(link);
+    item.appendChild(desc);
+    body.appendChild(item);
+  });
+
+  details.appendChild(body);
+  return details;
+}
+
+function buildDynamicDocPanel(container, kommuneInfo, centroid) {
+  container.innerHTML = '';
+
+  const [lon, lat] = centroid;
+
+  if (!kommuneInfo || !kommuneInfo.kommunenavnNorsk) {
+    const err = document.createElement('p');
+    err.className = 'law-intro';
+    err.textContent = 'Kunne ikke hente kommuneinformasjon for dette området (muligens åpent hav). Bruk nasjonale kartressurser nedenfor.';
+    container.appendChild(err);
+  } else {
+    const { kommunenavnNorsk: navn, kommunenummer, fylkesnavnNorsk: fylke } = kommuneInfo;
+    const slug = municipalitySlug(navn);
+
+    const intro = document.createElement('p');
+    intro.className = 'law-intro';
+    intro.innerHTML = `Plandokumenter for <strong>${navn} kommune</strong>${fylke ? ` (${fylke})` : ''}.`;
+    container.appendChild(intro);
+
+    container.appendChild(buildDocSection(`${navn} – Planer og bestemmelser`, [
+      {
+        name: `${navn} kommunes planportal`,
+        desc: `Kommunale planer, reguleringsplaner og bestemmelser for ${navn}`,
+        url: `https://www.${slug}.kommune.no/`,
+        type: 'link',
+      },
+      {
+        name: 'Kommunekart – arealplaner',
+        desc: `Kartbasert innsynsløsning med reguleringsplaner og arealformål i ${navn}`,
+        url: `https://kommunekart.com/?urlParams=${slug}`,
+        type: 'link',
+      },
+      {
+        name: 'Geonorge – arealplaner for dette området',
+        desc: `Søk i nasjonalt planregister for reguleringsplaner og kommunedelplaner`,
+        url: `https://www.geonorge.no/kart/?zoom=12&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`,
+        type: 'link',
+      },
+    ]));
+  }
+
+  container.appendChild(buildDocSection('Nasjonale kartressurser', [
+    {
+      name: 'Fiskeridirektoratets kart',
+      desc: 'Akvakulturlokaliteter, fiskerigrenser og marine sjødata',
+      url: 'https://kart.fiskeridir.no/',
+      type: 'link',
+    },
+    {
+      name: 'Miljødirektoratets naturbase',
+      desc: 'Verneområder, marine reservater og naturverdier langs kysten',
+      url: 'https://naturbase.no/',
+      type: 'link',
+    },
+    {
+      name: 'Statsforvalteren – plan og bygg',
+      desc: 'Statlig innsigelsesmyndighet og nasjonale planretningslinjer',
+      url: 'https://www.statsforvalteren.no/',
+      type: 'link',
+    },
+  ]));
+}
+
+function updateDocPanel(kommuneInfo, centroid) {
+  if (!lawPanel) return;
+  const container = lawPanel.querySelector('#tab-dokumenter');
+  buildDynamicDocPanel(container, kommuneInfo, centroid);
+}
+
 // ─── Tegning ─────────────────────────────────────────────────────────────────
 const draw = { active: false, points: [], finished: false };
 let drawBtn = null;
@@ -339,11 +354,17 @@ async function finishPolygon() {
   const area = polygonAreaKm2(draw.points);
   const centroid = polygonCentroid(draw.points);
 
-  // Vis panel med loading-tilstand mens sonen detekteres
+  // Vis panel med loading-tilstand i begge faner
   showLawPanel(area, null);
 
-  const zone = await detectZone(centroid);
+  // Hent sone og kommuneinfo parallelt
+  const [zone, kommuneInfo] = await Promise.all([
+    detectZone(centroid),
+    fetchMunicipalityInfo(centroid[0], centroid[1]),
+  ]);
+
   updatePanelZone(zone, area);
+  updateDocPanel(kommuneInfo, centroid);
 }
 
 function clearDraw() {
@@ -485,64 +506,18 @@ function buildLawPanel() {
   tabRegelverk.className = 'law-categories';
   panel.appendChild(tabRegelverk);
 
-  // Tab: Plandokumenter
+  // Tab: Plandokumenter (innhold fylles dynamisk etter at polygon er tegnet)
   const tabDokumenter = document.createElement('div');
   tabDokumenter.id = 'tab-dokumenter';
   tabDokumenter.className = 'law-categories';
   tabDokumenter.style.display = 'none';
-  buildDocPanel(tabDokumenter);
+  tabDokumenter.innerHTML = '<div class="doc-loading"><span class="zone-spinner"></span><span>Henter plandokumenter for området…</span></div>';
   panel.appendChild(tabDokumenter);
 
   document.getElementById('map').appendChild(panel);
   lawPanel = panel;
 }
 
-function buildDocPanel(container) {
-  const intro = document.createElement('p');
-  intro.className = 'law-intro';
-  intro.textContent = 'Relevante plandokumenter og kartressurser for Arendal kommune og marine sjøarealer.';
-  container.appendChild(intro);
-
-  MUNICIPAL_DOCS.forEach(section => {
-    const details = document.createElement('details');
-    details.className = 'law-category';
-    details.open = true;
-
-    const summary = document.createElement('summary');
-    summary.className = 'law-category-header';
-    summary.innerHTML = `<span>📂</span><span>${section.title}</span>`;
-    details.appendChild(summary);
-
-    const body = document.createElement('div');
-    body.className = 'law-category-body';
-
-    section.docs.forEach(doc => {
-      const item = document.createElement('div');
-      item.className = 'doc-item';
-
-      const link = document.createElement('a');
-      link.href = doc.url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.className = `doc-link${doc.type === 'pdf' ? ' doc-pdf' : ''}`;
-      const icon = doc.type === 'pdf'
-        ? '<span class="doc-type-badge">PDF</span>'
-        : '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
-      link.innerHTML = `${doc.name} ${icon}`;
-
-      const desc = document.createElement('p');
-      desc.className = 'doc-desc';
-      desc.textContent = doc.desc;
-
-      item.appendChild(link);
-      item.appendChild(desc);
-      body.appendChild(item);
-    });
-
-    details.appendChild(body);
-    container.appendChild(details);
-  });
-}
 
 function renderLawsTab(zone) {
   const container = lawPanel.querySelector('#tab-regelverk');
@@ -615,6 +590,12 @@ function showLawPanel(areaKm2, zone) {
   if (zone === null) {
     banner.className = 'zone-banner loading';
     banner.innerHTML = '<span class="zone-spinner"></span><span id="zone-text">Analyserer område…</span>';
+  }
+
+  // Reset docs-tab til loading-tilstand
+  const tabDok = lawPanel.querySelector('#tab-dokumenter');
+  if (tabDok) {
+    tabDok.innerHTML = '<div class="doc-loading"><span class="zone-spinner"></span><span>Henter plandokumenter for området…</span></div>';
   }
 
   lawPanel.classList.add('open');
@@ -777,6 +758,45 @@ map.on('load', () => {
     },
     paint: { 'text-color': '#0c2340', 'text-halo-color': '#fff', 'text-halo-width': 1.5 },
   });
+
+  // ─── Havne-popup ved klikk ────────────────────────────────────────────────
+  let activeHarbourPopup = null;
+
+  map.on('click', 'harbours-layer', e => {
+    if (draw.active) return; // Ikke vis popup mens tegning pågår
+    const feature = e.features[0];
+    if (!feature) return;
+
+    const coords = feature.geometry.coordinates.slice();
+    const p = feature.properties;
+
+    const typeMap = {
+      harbour: 'Havn', quay: 'Kai', pier: 'Brygge',
+      ferry_terminal: 'Ferjekai', dock: 'Dokk',
+    };
+    const rawType = p['seamark:type'] || p.man_made || p.amenity || p.harbour || '';
+    const typeLabel = typeMap[rawType] || (rawType ? rawType.charAt(0).toUpperCase() + rawType.slice(1) : '');
+    const name = p.name || p.ref || p['seamark:name'] || 'Ukjent navn';
+
+    let html = `<div class="harbour-popup"><strong>${name}</strong>`;
+    if (typeLabel) html += `<br/><span class="popup-type">${typeLabel}</span>`;
+    if (p.operator) html += `<br/><small class="popup-meta">Operatør: ${p.operator}</small>`;
+    if (p.website || p['contact:website']) {
+      const site = p.website || p['contact:website'];
+      html += `<br/><a href="${site}" target="_blank" rel="noopener noreferrer" class="popup-link">Nettside ↗</a>`;
+    }
+    html += `<br/><small class="popup-coords">${coords[1].toFixed(5)}° N &nbsp;${coords[0].toFixed(5)}° Ø</small>`;
+    html += '</div>';
+
+    if (activeHarbourPopup) activeHarbourPopup.remove();
+    activeHarbourPopup = new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(html)
+      .addTo(map);
+  });
+
+  map.on('mouseenter', 'harbours-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'harbours-layer', () => { map.getCanvas().style.cursor = ''; });
 
   // Karteventer for tegning og havner
   map.on('click', handleMapClick);
