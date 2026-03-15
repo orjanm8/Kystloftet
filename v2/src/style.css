@@ -1,1 +1,92 @@
 @import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Map control base
+--------------------------------------------------------------------------- */
+.map-control {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Search bar — top left
+--------------------------------------------------------------------------- */
+.search-bar {
+  top: 12px;
+  left: 12px;
+  gap: 0;
+}
+
+.search-bar input {
+  border: none;
+  outline: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  width: 220px;
+  background: transparent;
+  color: #1e293b;
+}
+
+.search-bar input::placeholder {
+  color: #94a3b8;
+}
+
+.search-bar button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px 10px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+
+.search-bar button:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.search-bar button + button {
+  border-left: 1px solid #e2e8f0;
+}
+
+/* ---------------------------------------------------------------------------
+   Layer switcher — bottom left
+--------------------------------------------------------------------------- */
+.layer-switcher {
+  bottom: 28px;
+  left: 12px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.layer-switcher button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.layer-switcher button:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.layer-switcher button.active {
+  background: #2563eb;
+  color: #fff;
+}
