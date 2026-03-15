@@ -789,12 +789,15 @@ map.on('load', () => {
   map.addLayer({ id: 'draw-outline-layer', type: 'line', source: 'draw-fill', paint: { 'line-color': '#2563eb', 'line-width': 2 } });
   map.addLayer({ id: 'draw-line-layer', type: 'line', source: 'draw-line', paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [4, 3] } });
 
-  // Geonorge Havnedata WMS – bruker VERSION=1.1.1 + SRS (samme mønster som Kystverket)
+  // Geonorge Havnedata WMS
+  // Merk: MapLibre erstatter {bbox-epsg-3857} men IKKE {width}/{height} –
+  // Geonorge sin WMS-server er streng og returnerer 400 ved literal {width}.
+  // Hardkoder 256 (= tileSize) for å få gyldige GetMap-forespørsler.
   const HAVNEDATA_BASE =
     'https://wms.geonorge.no/skwms1/wms.havnedata?' +
     'SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
     '&FORMAT=image/png&TRANSPARENT=true&SRS=EPSG:3857' +
-    '&STYLES=&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}';
+    '&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}';
 
   map.addSource('havnedata-wms', {
     type: 'raster',
