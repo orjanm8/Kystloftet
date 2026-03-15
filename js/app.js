@@ -666,185 +666,193 @@ function renderStrandsoneNotice(context) {
   }
 }
 
-// ─── PLANDOKUMENTER FRA AREALPLANER.NO OG GEONORGE ──────────────────────────
+// ─── SØK ETTER PLANDOKUMENTER PÅ KOMMUNENS NETTSIDE ─────────────────────────
+//
+// Strategi: nettleseren kan ikke hente fra .kommune.no direkte (CORS).
+// Vi bruker allorigins.win som gratis CORS-proxy, med corsproxy.io som backup.
+// Vi henter kommunens søkeside, parser ut alle PDF-lenker og rangerer dem
+// etter kystplanrelevans.
 
-// Prøver å hente faktiske plandokumenter fra arealplaner.no sin API.
-// Returnerer en liste med { planNavn, planId, dokumenter: [{tittel, url, type}] }
-// eller null hvis API-kallet feiler.
-async function fetchArealplanerDocs(kommunenummer) {
-  try {
-    // Hent liste over gjeldende arealplaner for kommunen
-    const listUrl =
-      `https://www.arealplaner.no/api/v2/kommuner/${kommunenummer}/arealplaner` +
-      `?planstatuskode=3&antall=10&sortering=sistEndret`;
-    const listRes = await fetch(listUrl, { headers: { Accept: "application/json" } });
-    if (!listRes.ok) return null;
-    const listData = await listRes.json();
-    const planer = listData.arealplaner ?? listData ?? [];
-    if (!Array.isArray(planer) || planer.length === 0) return null;
+const KYST_ORD = [
+  'arealplan', 'kommuneplan', 'sjø', 'sjøareal', 'hav', 'havbruk',
+  'kyst', 'kystsone', 'kystplan', 'havn', 'havneplan', 'båthavn',
+  'strandsone', 'marin', 'akvakultur', 'fiskeri', 'brygge', 'molo',
+  'småbåt', 'reguleringsplan', 'planbestemmelse', 'plankart',
+];
 
-    // Hent dokumenter for de 5 første planene parallelt
-    const topPlaner = planer.slice(0, 5);
-    const results = await Promise.allSettled(
-      topPlaner.map(async (plan) => {
-        const planId = plan.id ?? plan.planId ?? plan.planidentifikasjon;
-        if (!planId) return null;
-        const docsUrl =
-          `https://www.arealplaner.no/api/v2/kommuner/${kommunenummer}/arealplaner/${planId}/dokumenter`;
-        const docsRes = await fetch(docsUrl, { headers: { Accept: "application/json" } });
-        if (!docsRes.ok) return null;
-        const docsData = await docsRes.json();
-        const dokumenter = (docsData.dokumenter ?? docsData ?? [])
-          .filter((d) => d.dokumentUrl || d.url)
-          .map((d) => ({
-            tittel: d.dokumentnavn ?? d.tittel ?? d.name ?? "Dokument",
-            url: d.dokumentUrl ?? d.url,
-            type: (d.dokumentUrl ?? d.url ?? "").toLowerCase().endsWith(".pdf") ? "PDF" : "Lenke",
-          }));
-        return { planNavn: plan.planNavn ?? plan.navn ?? `Plan ${planId}`, planId, dokumenter };
-      })
-    );
-
-    const docs = results
-      .filter((r) => r.status === "fulfilled" && r.value?.dokumenter?.length)
-      .map((r) => r.value);
-    return docs.length ? docs : null;
-  } catch (err) {
-    console.warn("arealplaner.no API feil:", err.message);
-    return null;
-  }
+function toSlug(navn) {
+  return navn
+    .toLowerCase()
+    .replace(/æ/g, 'ae').replace(/ø/g, 'o').replace(/å/g, 'a')
+    .replace(/[^a-z0-9]/g, '');
 }
 
-// Fallback: henter metadata fra Geonorge kartkatalog for kommunen
-async function fetchGeonorgeDatasets(kommunenummer, kommunenavn) {
-  try {
-    const url =
-      `https://kartkatalog.geonorge.no/api/search` +
-      `?text=${encodeURIComponent("kommuneplan " + kommunenavn)}` +
-      `&limit=6&mediatype=json`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.Results ?? [])
-      .filter((r) => r.Title && (r.DistributionDetails?.URL || r.ShowDetailsUrl))
-      .slice(0, 5)
-      .map((r) => ({
-        tittel: r.Title,
-        url: r.DistributionDetails?.URL ?? r.ShowDetailsUrl,
-        type: "Datasett",
-      }));
-  } catch (_) {
-    return [];
-  }
+function kystScore(tekst) {
+  const lower = (tekst || '').toLowerCase();
+  return KYST_ORD.filter(kw => lower.includes(kw)).length;
 }
 
-// Rendrer dokumentpanel – kaller API asynkront og oppdaterer panelet
+// Henter HTML via CORS-proxy – prøver to ulike proxyer
+async function hentViaProxy(url) {
+  const proxyer = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  ];
+  for (const proxy of proxyer) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 12000);
+      const res = await fetch(proxy, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.ok) return res.text();
+    } catch (_) { /* prøv neste */ }
+  }
+  return null;
+}
+
+// Parser HTML og trekker ut PDF-lenker, sortert etter kystplanrelevans
+function trekkUtPDFer(html, baseUrl) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const sett = new Set();
+  const lenker = [];
+
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (!href.toLowerCase().includes('.pdf')) return;
+    let url;
+    try { url = new URL(href, baseUrl).href; } catch (_) { return; }
+    if (sett.has(url)) return;
+    sett.add(url);
+    const tittel = a.textContent.trim().replace(/\s+/g, ' ') ||
+      decodeURIComponent(url.split('/').pop()).replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+    lenker.push({ tittel, url, score: kystScore(url + ' ' + tittel) });
+  });
+
+  return lenker
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map(({ tittel, url }) => ({ tittel, url }));
+}
+
+// Søker på kommunens nettsted via proxy og returnerer PDF-lenker
+async function sokPaKommuneNettsted(kommunenavn) {
+  const slug = toSlug(kommunenavn);
+  const base = `https://www.${slug}.kommune.no`;
+  const query = 'arealplan sjø havn kyst';
+
+  // Prøv WordPress-søk og noen alternative søkemønstre
+  const sokeUrler = [
+    `${base}/?s=${encodeURIComponent(query)}`,
+    `${base}/sok/?q=${encodeURIComponent(query)}`,
+    `${base}/search/?q=${encodeURIComponent(query)}`,
+    `${base}/tjenester/plan-bygg-og-eiendom/`,
+    `${base}/politikk-og-medvirkning/kommunens-planer/`,
+  ];
+
+  for (const url of sokeUrler) {
+    const html = await hentViaProxy(url);
+    if (!html) continue;
+    const pdfer = trekkUtPDFer(html, base);
+    if (pdfer.length >= 1) return { pdfer, kilde: slug };
+  }
+  return null;
+}
+
+// Rendrer dokumentpanel – kaller søk asynkront og oppdaterer panelet
 async function renderDocumentsPanel(kommuner, isSea) {
-  const el = document.getElementById("panel-documents");
-  const divider = document.getElementById("divider-kommune");
+  const el = document.getElementById('panel-documents');
+  const divider = document.getElementById('divider-kommune');
 
   if (!kommuner.length) {
-    el.innerHTML = "";
-    el.classList.remove("expanded");
-    divider.textContent = "Dokumenter og ressurser";
+    el.innerHTML = '';
+    el.classList.remove('expanded');
+    divider.textContent = 'Dokumenter og ressurser';
     return;
   }
 
-  const primKommune = kommuner[0];
-  divider.textContent = `${kommuner.map((k) => k.kommunenavn).join(" / ")} – dokumenter og ressurser`;
+  const k = kommuner[0];
+  const slug = toSlug(k.kommunenavn);
+  divider.textContent = `${kommuner.map(k => k.kommunenavn).join(' / ')} – dokumenter og ressurser`;
 
-  // Vis lasteindikator mens vi henter data
+  // Vis lasteindikator
   el.innerHTML = `
     <div class="info-panel-hdr">
       <div class="info-panel-icon">📄</div>
       <div class="info-panel-meta">
-        <div class="info-panel-title">Plandokumenter – henter…</div>
-        <div class="info-panel-sub">Søker i nasjonalt planregister</div>
+        <div class="info-panel-title">Søker på ${slug}.kommune.no…</div>
+        <div class="info-panel-sub">Leter etter PDFer – arealplan, sjø, kyst</div>
       </div>
       <span class="info-panel-tag tag-data">Laster</span>
     </div>
     <div class="info-panel-body">
-      <div class="doc-loading"><div class="spinner-sm"></div> Henter dokumenter fra arealplaner.no…</div>
+      <div class="doc-loading"><div class="spinner-sm"></div> Henter søkeresultater…</div>
     </div>`;
-  el.classList.add("expanded");
-
-  el.querySelector(".info-panel-hdr").addEventListener("click", () =>
-    el.classList.toggle("expanded")
+  el.classList.add('expanded');
+  el.querySelector('.info-panel-hdr').addEventListener('click', () =>
+    el.classList.toggle('expanded')
   );
 
-  // Hent fra arealplaner.no API
-  const planDocs = await fetchArealplanerDocs(primKommune.kommunenummer);
+  // Kjør søket
+  const resultat = await sokPaKommuneNettsted(k.kommunenavn);
 
-  if (planDocs && planDocs.length) {
-    // Vi fikk faktiske plandokumenter fra arealplaner.no API
-    let docsHtml = planDocs.map((plan) => `
-      <div class="doc-plan-group">
-        <div class="doc-plan-name">${plan.planNavn}</div>
-        ${plan.dokumenter.map((d) => `
-          <a class="info-link doc-link" href="${d.url}" target="_blank" rel="noopener">
-            <span class="doc-type-badge ${d.type === "PDF" ? "badge-pdf" : "badge-link"}">${d.type}</span>
-            ${d.tittel} →
-          </a>`).join("")}
-      </div>`).join("");
+  if (resultat && resultat.pdfer.length) {
+    const listeHtml = resultat.pdfer.map(d => `
+      <a class="info-link doc-link" href="${d.url}" target="_blank" rel="noopener">
+        <span class="doc-type-badge badge-pdf">PDF</span>${d.tittel} →
+      </a>`).join('');
 
     el.innerHTML = `
       <div class="info-panel-hdr">
         <div class="info-panel-icon">📄</div>
         <div class="info-panel-meta">
-          <div class="info-panel-title">Plandokumenter – ${primKommune.kommunenavn}</div>
-          <div class="info-panel-sub">Hentet fra arealplaner.no</div>
+          <div class="info-panel-title">PDFer – ${k.kommunenavn}</div>
+          <div class="info-panel-sub">Funnet på ${slug}.kommune.no</div>
         </div>
-        <span class="info-panel-tag tag-sea">Planer</span>
+        <span class="info-panel-tag tag-sea">PDF</span>
         <svg class="panel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div class="info-panel-body">
-        <div class="info-panel-links doc-list">${docsHtml}</div>
-        <a class="info-link" href="https://www.arealplaner.no/${primKommune.kommunenummer}/arealplaner" target="_blank" rel="noopener">
-          Alle planer – arealplaner.no →
+        <div class="info-panel-links doc-list">${listeHtml}</div>
+        <a class="info-link" href="https://www.${slug}.kommune.no/?s=${encodeURIComponent('arealplan sjø kyst havn')}" target="_blank" rel="noopener">
+          Søk flere dokumenter på ${slug}.kommune.no →
+        </a>
+        <a class="info-link" href="https://www.arealplaner.no/${k.kommunenummer}/arealplaner" target="_blank" rel="noopener">
+          Arealplaner.no – nasjonalt planregister →
         </a>
       </div>`;
   } else {
-    // API feilet – vis portal-lenker og prøv Geonorge
-    const geonorgeDocs = await fetchGeonorgeDatasets(primKommune.kommunenummer, primKommune.kommunenavn);
-
-    let geoHtml = "";
-    if (geonorgeDocs.length) {
-      geoHtml = `<div class="doc-plan-group"><div class="doc-plan-name">Geonorge-datasett</div>` +
-        geonorgeDocs.map((d) => `
-          <a class="info-link doc-link" href="${d.url}" target="_blank" rel="noopener">
-            <span class="doc-type-badge badge-link">${d.type}</span>${d.tittel} →
-          </a>`).join("") +
-        `</div>`;
-    }
-
+    // Ingen PDF-treff – vis direkte søkelenker brukeren kan klikke selv
     el.innerHTML = `
       <div class="info-panel-hdr">
         <div class="info-panel-icon">📄</div>
         <div class="info-panel-meta">
-          <div class="info-panel-title">Plandokumenter – ${primKommune.kommunenavn}</div>
-          <div class="info-panel-sub">Planregister og portaler</div>
+          <div class="info-panel-title">Plandokumenter – ${k.kommunenavn}</div>
+          <div class="info-panel-sub">Ingen PDFer funnet automatisk – søk manuelt</div>
         </div>
-        <span class="info-panel-tag ${isSea ? "tag-sea" : "tag-land"}">Planer</span>
+        <span class="info-panel-tag ${isSea ? 'tag-sea' : 'tag-land'}">Planer</span>
         <svg class="panel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div class="info-panel-body">
-        ${geoHtml}
         <div class="info-panel-links">
-          <a class="info-link" href="https://www.arealplaner.no/${primKommune.kommunenummer}/arealplaner" target="_blank" rel="noopener">
-            Arealplaner.no – alle planer for ${primKommune.kommunenavn} →
+          <a class="info-link" href="https://www.${slug}.kommune.no/?s=${encodeURIComponent('arealplan sjø havn kyst')}" target="_blank" rel="noopener">
+            Søk «arealplan sjø havn kyst» på ${slug}.kommune.no →
           </a>
-          <a class="info-link" href="https://einnsyn.no/search?municipality=${primKommune.kommunenummer}" target="_blank" rel="noopener">
-            eInnsyn – postliste og offentlige dokumenter →
+          <a class="info-link" href="https://www.arealplaner.no/${k.kommunenummer}/arealplaner" target="_blank" rel="noopener">
+            Arealplaner.no – planregister for ${k.kommunenavn} →
           </a>
-          <a class="info-link" href="https://kartkatalog.geonorge.no/search?text=kommuneplan+${encodeURIComponent(primKommune.kommunenavn)}" target="_blank" rel="noopener">
-            Geonorge – plandata for ${primKommune.kommunenavn} →
+          <a class="info-link" href="https://einnsyn.no/search?municipality=${k.kommunenummer}" target="_blank" rel="noopener">
+            eInnsyn – offentlig postliste →
+          </a>
+          <a class="info-link" href="https://kartkatalog.geonorge.no/search?text=kommuneplan+${encodeURIComponent(k.kommunenavn)}" target="_blank" rel="noopener">
+            Geonorge – plandata →
           </a>
         </div>
       </div>`;
   }
 
-  el.querySelector(".info-panel-hdr").addEventListener("click", () =>
-    el.classList.toggle("expanded")
+  el.querySelector('.info-panel-hdr').addEventListener('click', () =>
+    el.classList.toggle('expanded')
   );
 }
 
