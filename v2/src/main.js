@@ -85,7 +85,7 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
 const geolocateCtrl = new maplibregl.GeolocateControl({
-  positionOptions: { enableHighAccuracy: true },
+  positionOptions: { enableHighAccuracy: false },
   trackUserLocation: false,
   showAccuracyCircle: true,
 });
