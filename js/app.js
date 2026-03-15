@@ -210,59 +210,55 @@ document.addEventListener("click", (e) => {
 let locationMarker = null;
 
 document.getElementById("btn-locate").addEventListener("click", () => {
-  if (!navigator.geolocation) {
-    document.getElementById("status-text").textContent =
-      "❌ Posisjonstjenester støttes ikke i denne nettleseren";
-    return;
-  }
+  if (!navigator.geolocation) return;
+
   const btn = document.getElementById("btn-locate");
   btn.classList.add("locating");
 
-  function onSuccess(pos) {
-    btn.classList.remove("locating");
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
-    const acc = Math.round(pos.coords.accuracy);
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      btn.classList.remove("locating");
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
 
-    map.flyTo([lat, lon], 15, { duration: 1.5 });
+      map.flyTo([lat, lon], 15, { duration: 1.5 });
 
-    if (locationMarker) map.removeLayer(locationMarker);
-    const icon = L.divIcon({
-      className: "location-marker-icon",
-      html: `<div class="loc-pulse"></div><div class="loc-dot"></div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    });
-    locationMarker = L.marker([lat, lon], { icon, zIndexOffset: 500 })
-      .bindTooltip(`Din posisjon (±${acc}m)`, { direction: "top", offset: [0, -10] })
-      .addTo(map);
-  }
-
-  function onError(err) {
-    btn.classList.remove("locating");
-    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
-    const msgs = {
-      // Tillatelse nektet – brukeren sa nei i nettleserdialogen
-      1: "❌ Posisjonstillatelse nektet – tillat i nettleserinnstillinger og prøv igjen",
-      // POSITION_UNAVAILABLE – vanligvis OS-nivå, ikke nettleser
-      2: isMac
-        ? "❌ Posisjon utilgjengelig – gå til Systeminnstillinger → Personvern → Stedstjenester og aktiver for Safari/Chrome"
-        : "❌ Posisjon utilgjengelig – sjekk at stedstjenester er aktivert for nettleseren i OS-innstillinger",
-      3: "❌ Tidsavbrudd – sjekk nettverkstilkobling og prøv igjen",
-    };
-    const statusEl = document.getElementById("status-text");
-    const prev = statusEl.textContent;
-    statusEl.textContent = msgs[err.code] || "❌ Posisjon ikke tilgjengelig";
-    setTimeout(() => { statusEl.textContent = prev; }, 8000);
-  }
-
-  // Start uten høy nøyaktighet – rask og pålitelig på alle enheter
-  navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-    timeout: 12000,
-    maximumAge: 60000,
-    enableHighAccuracy: false,
-  });
+      if (locationMarker) map.removeLayer(locationMarker);
+      const icon = L.divIcon({
+        className: "location-marker-icon",
+        html: `<div class="loc-pulse"></div><div class="loc-dot"></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+      locationMarker = L.marker([lat, lon], { icon, zIndexOffset: 500 })
+        .bindTooltip(`Din posisjon (±${Math.round(accuracy)}m)`, {
+          direction: "top", offset: [0, -10],
+        })
+        .addTo(map);
+    },
+    () => {
+      btn.classList.remove("locating");
+      showLocationError();
+    },
+    { timeout: 10000, maximumAge: 0 }
+  );
 });
+
+function showLocationError() {
+  // Vis popup i kartet med OS-spesifikk veiledning
+  const isMac = /Mac/.test(navigator.platform || navigator.userAgent);
+  const msg = isMac
+    ? `<b>Posisjon ikke tilgjengelig</b><br><br>
+       På Mac må du aktivere stedstjenester:<br>
+       <b>Systeminnstillinger → Personvern → Stedstjenester</b><br>
+       Aktiver tjenesten OG hak av for nettleseren (Safari/Chrome) i listen.`
+    : `<b>Posisjon ikke tilgjengelig</b><br><br>
+       Sjekk at stedstjenester er aktivert for nettleseren i OS-innstillinger.`;
+
+  L.popup({ maxWidth: 280 })
+    .setLatLng(map.getCenter())
+    .setContent(msg)
+    .openOn(map);
+}
 
 // ─── TEGNELAG OG KONTROLLER ──────────────────────────────────────────────────
 
