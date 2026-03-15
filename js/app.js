@@ -12,9 +12,13 @@ const KARTVERKET_TOPO =
   "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const KARTVERKET_GREY =
   "https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png";
+const ESRI_SATELLITE =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 const ATTRIBUTION_KARTVERKET =
   '&copy; <a href="https://kartverket.no">Kartverket</a>';
+const ATTRIBUTION_ESRI =
+  '&copy; <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics';
 
 // Geonorge kommuneinfo – returnerer kommunenavn/-nummer (NB: returnerer data
 // selv for sjøpunkter innenfor kommunegrensen, brukes KUN til kommunenavn)
@@ -64,6 +68,10 @@ const layers = {
   grey: L.tileLayer(KARTVERKET_GREY, {
     attribution: ATTRIBUTION_KARTVERKET,
     maxZoom: 18,
+  }),
+  satellite: L.tileLayer(ESRI_SATELLITE, {
+    attribution: ATTRIBUTION_ESRI,
+    maxZoom: 19,
   }),
 };
 
@@ -232,15 +240,20 @@ document.getElementById("btn-locate").addEventListener("click", () => {
 
   function onError(err) {
     btn.classList.remove("locating");
+    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
     const msgs = {
-      1: "❌ Posisjonstillatelse nektet – tillat posisjon i nettleserinnstillinger",
-      2: "❌ Posisjon ikke tilgjengelig akkurat nå",
-      3: "❌ Tidsavbrudd – prøv igjen",
+      // Tillatelse nektet – brukeren sa nei i nettleserdialogen
+      1: "❌ Posisjonstillatelse nektet – tillat i nettleserinnstillinger og prøv igjen",
+      // POSITION_UNAVAILABLE – vanligvis OS-nivå, ikke nettleser
+      2: isMac
+        ? "❌ Posisjon utilgjengelig – gå til Systeminnstillinger → Personvern → Stedstjenester og aktiver for Safari/Chrome"
+        : "❌ Posisjon utilgjengelig – sjekk at stedstjenester er aktivert for nettleseren i OS-innstillinger",
+      3: "❌ Tidsavbrudd – sjekk nettverkstilkobling og prøv igjen",
     };
     const statusEl = document.getElementById("status-text");
     const prev = statusEl.textContent;
     statusEl.textContent = msgs[err.code] || "❌ Posisjon ikke tilgjengelig";
-    setTimeout(() => { statusEl.textContent = prev; }, 5000);
+    setTimeout(() => { statusEl.textContent = prev; }, 8000);
   }
 
   // Start uten høy nøyaktighet – rask og pålitelig på alle enheter
@@ -687,11 +700,15 @@ function kommuneLinks(geo, isSea) {
   }
 
   // ── Generiske lenker for alle andre kommuner ──
+  // arealplaner.no/{kommunenummer}/arealplaner er nasjonal portal med
+  // kommuneplanens arealdel (inkl. sjøareal) for alle norske kommuner.
   const slug = toKommuneSlug(navn);
-  return `
-    <a class="info-link" href="https://www.${slug}.kommune.no/" target="_blank" rel="noopener">${navn} kommune – nettsted →</a>
-    <a class="info-link" href="https://arealplaner.no/" target="_blank" rel="noopener">Arealplaner.no – planer for ${navn} →</a>
-    <a class="info-link" href="https://kartkatalog.geonorge.no/search?text=kommuneplan+${encodeURIComponent(navn)}" target="_blank" rel="noopener">Geonorge – kommuneplan ${navn} →</a>`;
+  const seaNote = isSea
+    ? `<a class="info-link" href="https://arealplaner.no/${knr}/arealplaner" target="_blank" rel="noopener">Kommuneplanens arealdel – sjøareal ${navn} (Arealplaner.no) →</a>`
+    : `<a class="info-link" href="https://arealplaner.no/${knr}/arealplaner" target="_blank" rel="noopener">Kommuneplanens arealdel for ${navn} (Arealplaner.no) →</a>`;
+  return `${seaNote}
+    <a class="info-link" href="https://www.${slug}.kommune.no/" target="_blank" rel="noopener">${navn} kommune – planer og byggesak →</a>
+    <a class="info-link" href="https://kartkatalog.geonorge.no/search?text=kommuneplan+${encodeURIComponent(navn)}" target="_blank" rel="noopener">Geonorge – plandata for ${navn} →</a>`;
 }
 
 function renderMunicipalityPanel(context, kommuner) {
