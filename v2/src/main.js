@@ -1,7 +1,80 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import maplibregl from 'maplibre-gl';
-import { LAWS } from './laws.js';
+import { LAWS, ZONE_LABELS, filterLawsByZone, countLaws } from './laws.js';
+
+// ─── Kommunedokumenter – Arendal ─────────────────────────────────────────────
+const MUNICIPAL_DOCS = [
+  {
+    title: 'Kommuneplan',
+    docs: [
+      {
+        name: 'Kommuneplanens arealdel',
+        desc: 'Overordnet plan for arealbruk i Arendal, inkl. sjøarealer og strandsone',
+        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/arealdelen/',
+        type: 'link',
+      },
+      {
+        name: 'Kommuneplanens samfunnsdel',
+        desc: 'Overordnede mål og strategier for samfunnsutviklingen i Arendal',
+        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/samfunnsdelen/',
+        type: 'link',
+      },
+      {
+        name: 'Planbestemmelser og retningslinjer',
+        desc: 'Juridisk bindende bestemmelser knyttet til kommuneplanens arealdel',
+        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/arealdelen/',
+        type: 'link',
+      },
+    ],
+  },
+  {
+    title: 'Kommunedelplaner',
+    docs: [
+      {
+        name: 'Kystsoneplan / sjøarealplan',
+        desc: 'Plan for sjøarealene i Arendal – akvakultur, friluftsliv, ferdsel og vern',
+        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/kommuneplan/',
+        type: 'link',
+      },
+      {
+        name: 'Alle planer i kommunens planregister',
+        desc: 'Søk etter reguleringsplaner og kommunedelplaner på Arendal kommunes sider',
+        url: 'https://www.arendal.kommune.no/politikk-og-administrasjon/planlegging-og-byggesak/reguleringsplaner/',
+        type: 'link',
+      },
+    ],
+  },
+  {
+    title: 'Nasjonale kartressurser',
+    docs: [
+      {
+        name: 'Geonorge – planer og arealdata',
+        desc: 'Kartverkets nasjonale portal for arealplaner og geografiske data',
+        url: 'https://www.geonorge.no/aktuelt/om-geonorge/',
+        type: 'link',
+      },
+      {
+        name: 'Kommunekart.com – Arendal',
+        desc: 'Kartinnsynsløsning med reguleringsplaner og arealformål',
+        url: 'https://kommunekart.com/?urlParams=arendal',
+        type: 'link',
+      },
+      {
+        name: 'Miljødirektoratets naturbase',
+        desc: 'Verneområder, marine reservater og naturverdier',
+        url: 'https://naturbase.no/',
+        type: 'link',
+      },
+      {
+        name: 'Fiskeridirektoratets kartinnsynsportal',
+        desc: 'Akvakulturlokaliteter, fiskerigrenser og relevante sjødata',
+        url: 'https://kart.fiskeridir.no/',
+        type: 'link',
+      },
+    ],
+  },
+];
 
 // ─── Base layers ─────────────────────────────────────────────────────────────
 const BASE_LAYERS = {
@@ -43,7 +116,7 @@ const kystverketWMS =
   '&WIDTH={width}&HEIGHT={height}' +
   '&BBOX={bbox-epsg-3857}';
 
-// ─── Map ─────────────────────────────────────────────────────────────────────
+// ─── Map (sentrert på Arendal / Aust-Agder) ───────────────────────────────────
 const map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -68,13 +141,13 @@ const map = new maplibregl.Map({
       { id: 'kystverket-layer', type: 'raster', source: 'kystverket', paint: { 'raster-opacity': 0.85 } },
     ],
   },
-  center: [10.75, 59.91],
-  zoom: 5,
+  center: [8.77, 58.46],   // Arendal
+  zoom: 10,
 });
 
 map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-// ─── Markers (no popup) ───────────────────────────────────────────────────────
+// ─── Markers (uten popup) ────────────────────────────────────────────────────
 let activeMarker = null;
 
 function placeMarker(lngLat, color) {
@@ -82,7 +155,7 @@ function placeMarker(lngLat, color) {
   activeMarker = new maplibregl.Marker({ color }).setLngLat(lngLat).addTo(map);
 }
 
-// ─── Search ──────────────────────────────────────────────────────────────────
+// ─── Søk ─────────────────────────────────────────────────────────────────────
 async function doSearch(query) {
   const q = query.trim();
   if (!q) return;
@@ -114,7 +187,41 @@ function goToMyPosition() {
   );
 }
 
-// ─── Drawing ─────────────────────────────────────────────────────────────────
+// ─── Sone-deteksjon via Nominatim ─────────────────────────────────────────────
+async function detectZone(centroid) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${centroid[1]}&lon=${centroid[0]}&format=json`,
+      { headers: { 'Accept-Language': 'no' }, signal: AbortSignal.timeout(6000) },
+    );
+    if (!res.ok) return 'sea';
+    const data = await res.json();
+    if (data.error) return 'sea';
+
+    const addr = data.address || {};
+    const cls = data.class;
+    const type = data.type;
+
+    // Åpent hav
+    if (addr.sea || addr.ocean || addr.bay || type === 'sea' || type === 'ocean') return 'sea';
+
+    // Sjøareal (fjord, sund, bukt)
+    if (cls === 'natural' && ['water', 'bay', 'strait', 'fjord', 'inlet'].includes(type)) return 'coastal';
+    if (cls === 'waterway') return 'coastal';
+
+    // Tydelig landadresse
+    if (addr.road || addr.suburb || addr.residential || addr.village || addr.town || addr.city) return 'land';
+
+    // Har kommune/fylke men ingen spesifikk adresse → kystnær sone
+    if (addr.municipality || addr.county || addr.country_code === 'no') return 'coastal';
+
+    return 'sea';
+  } catch {
+    return 'unknown';
+  }
+}
+
+// ─── Tegning ─────────────────────────────────────────────────────────────────
 const draw = { active: false, points: [], finished: false };
 let drawBtn = null;
 let clickTimer = null;
@@ -135,6 +242,13 @@ function polygonAreaKm2(coords) {
   return Math.abs((area * R * R) / 2);
 }
 
+function polygonCentroid(coords) {
+  const n = coords.length;
+  let lng = 0, lat = 0;
+  coords.forEach(([lo, la]) => { lng += lo; lat += la; });
+  return [lng / n, lat / n];
+}
+
 function formatArea(km2) {
   if (km2 < 0.001) return `${Math.round(km2 * 1e6).toLocaleString('nb-NO')} m²`;
   if (km2 < 1) return `${(km2 * 100).toFixed(1)} ha`;
@@ -143,15 +257,10 @@ function formatArea(km2) {
 
 function updateDrawSources() {
   const pts = draw.points;
-
-  // Preview line while drawing
-  const lineCoords = pts.length >= 2 ? pts : [];
   map.getSource('draw-line').setData({
     type: 'Feature',
-    geometry: { type: 'LineString', coordinates: lineCoords },
+    geometry: { type: 'LineString', coordinates: pts.length >= 2 ? pts : [] },
   });
-
-  // Finished polygon fill
   if (draw.finished && pts.length >= 3) {
     map.getSource('draw-fill').setData({
       type: 'Feature',
@@ -169,24 +278,25 @@ function startDraw() {
   map.getCanvas().style.cursor = 'crosshair';
   updateDrawSources();
   hideLawPanel();
-  if (drawBtn) {
-    drawBtn.textContent = 'Avbryt tegning';
-    drawBtn.classList.add('active');
-  }
+  if (drawBtn) { drawBtn.querySelector('span').textContent = 'Avbryt tegning'; drawBtn.classList.add('active'); }
 }
 
-function finishPolygon() {
+async function finishPolygon() {
   if (draw.points.length < 3) return;
   draw.active = false;
   draw.finished = true;
   map.getCanvas().style.cursor = '';
   updateDrawSources();
-  if (drawBtn) {
-    drawBtn.textContent = 'Slett polygon';
-    drawBtn.classList.remove('active');
-  }
+  if (drawBtn) { drawBtn.querySelector('span').textContent = 'Slett polygon'; drawBtn.classList.remove('active'); }
+
   const area = polygonAreaKm2(draw.points);
-  showLawPanel(area);
+  const centroid = polygonCentroid(draw.points);
+
+  // Vis panel med loading-tilstand mens sonen detekteres
+  showLawPanel(area, null);
+
+  const zone = await detectZone(centroid);
+  updatePanelZone(zone, area);
 }
 
 function clearDraw() {
@@ -196,85 +306,211 @@ function clearDraw() {
   map.getCanvas().style.cursor = '';
   updateDrawSources();
   hideLawPanel();
-  if (drawBtn) {
-    drawBtn.textContent = 'Tegn polygon';
-    drawBtn.classList.remove('active');
-  }
+  if (drawBtn) { drawBtn.querySelector('span').textContent = 'Tegn polygon'; drawBtn.classList.remove('active'); }
 }
 
 function handleMapClick(e) {
   if (!draw.active) return;
   clearTimeout(clickTimer);
   const pt = [e.lngLat.lng, e.lngLat.lat];
-  clickTimer = setTimeout(() => {
-    draw.points.push(pt);
-    updateDrawSources();
-  }, 180);
+  clickTimer = setTimeout(() => { draw.points.push(pt); updateDrawSources(); }, 180);
 }
 
 function handleMapDblclick(e) {
   if (!draw.active) return;
   e.preventDefault();
   clearTimeout(clickTimer);
-  // Remove last point added by the second click of the double-click
   if (draw.points.length > 0) draw.points.pop();
-  if (draw.points.length >= 3) {
-    finishPolygon();
-  }
+  if (draw.points.length >= 3) finishPolygon();
 }
 
 function handleMapMousemove(e) {
   if (!draw.active || draw.points.length === 0) return;
-  const cursor = [e.lngLat.lng, e.lngLat.lat];
-  const pts = [...draw.points, cursor];
-  map.getSource('draw-line').setData({
-    type: 'Feature',
-    geometry: { type: 'LineString', coordinates: pts },
-  });
+  const pts = [...draw.points, [e.lngLat.lng, e.lngLat.lat]];
+  map.getSource('draw-line').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: pts } });
 }
 
-// ─── Law panel ───────────────────────────────────────────────────────────────
+// ─── Havner og kaier (Overpass API) ──────────────────────────────────────────
+let harboursEnabled = false;
+let harbourDebounce = null;
+
+function overpassToGeoJSON(data) {
+  return {
+    type: 'FeatureCollection',
+    features: data.elements
+      .map(el => {
+        const coords = el.center ? [el.center.lon, el.center.lat] : (el.lon !== undefined ? [el.lon, el.lat] : null);
+        if (!coords) return null;
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: coords },
+          properties: { ...el.tags, osm_id: el.id },
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
+async function fetchHarbours() {
+  if (!harboursEnabled) return;
+  const b = map.getBounds();
+  const query = `[out:json][bbox:${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}][timeout:20];`
+    + `(`
+    + `node["amenity"="ferry_terminal"];`
+    + `node["harbour"="yes"];`
+    + `node["seamark:type"="harbour"];`
+    + `node["man_made"="quay"];`
+    + `node["man_made"="pier"];`
+    + `way["harbour"="yes"];`
+    + `way["man_made"="quay"];`
+    + `way["landuse"="harbour"];`
+    + `);`
+    + `out center;`;
+  try {
+    const res = await fetch(
+      `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
+    );
+    const data = await res.json();
+    map.getSource('harbours').setData(overpassToGeoJSON(data));
+  } catch (e) {
+    console.error('Overpass-spørring feilet:', e);
+  }
+}
+
+function scheduleFetchHarbours() {
+  if (!harboursEnabled) return;
+  clearTimeout(harbourDebounce);
+  harbourDebounce = setTimeout(fetchHarbours, 700);
+}
+
+// ─── Regelverkspanel ──────────────────────────────────────────────────────────
 let lawPanel = null;
+let activeTab = 'regelverk';
 
 function buildLawPanel() {
   const panel = document.createElement('div');
   panel.id = 'law-panel';
   panel.className = 'law-panel';
 
+  // Header
   const header = document.createElement('div');
   header.className = 'law-panel-header';
-
-  const title = document.createElement('div');
-  title.className = 'law-panel-title';
-  title.innerHTML = '<span class="law-panel-icon">⚖️</span> Gjeldende regelverk';
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'law-panel-close';
-  closeBtn.innerHTML = '✕';
-  closeBtn.title = 'Lukk';
-  closeBtn.addEventListener('click', () => {
-    clearDraw();
-  });
-
-  header.appendChild(title);
-  header.appendChild(closeBtn);
+  header.innerHTML = `
+    <div class="law-panel-title"><span class="law-panel-icon">⚖️</span> Regelverk og plandokumenter</div>
+    <button class="law-panel-close" title="Lukk og slett polygon">✕</button>`;
+  header.querySelector('.law-panel-close').addEventListener('click', clearDraw);
   panel.appendChild(header);
 
+  // Sone + antall lover
+  const zoneBanner = document.createElement('div');
+  zoneBanner.id = 'zone-banner';
+  zoneBanner.className = 'zone-banner loading';
+  zoneBanner.innerHTML = '<span class="zone-dot"></span><span id="zone-text">Analyserer område…</span>';
+  panel.appendChild(zoneBanner);
+
+  // Areal-info
   const areaInfo = document.createElement('div');
   areaInfo.id = 'law-area-info';
   areaInfo.className = 'law-area-info';
   panel.appendChild(areaInfo);
 
+  // Faner
+  const tabs = document.createElement('div');
+  tabs.className = 'law-tabs';
+  ['regelverk', 'dokumenter'].forEach(tab => {
+    const btn = document.createElement('button');
+    btn.dataset.tab = tab;
+    btn.textContent = tab === 'regelverk' ? 'Regelverk' : 'Plandokumenter';
+    btn.className = tab === activeTab ? 'active' : '';
+    btn.addEventListener('click', () => {
+      activeTab = tab;
+      tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      panel.querySelector('#tab-regelverk').style.display = tab === 'regelverk' ? '' : 'none';
+      panel.querySelector('#tab-dokumenter').style.display = tab === 'dokumenter' ? '' : 'none';
+    });
+    tabs.appendChild(btn);
+  });
+  panel.appendChild(tabs);
+
+  // Tab: Regelverk
+  const tabRegelverk = document.createElement('div');
+  tabRegelverk.id = 'tab-regelverk';
+  tabRegelverk.className = 'law-categories';
+  panel.appendChild(tabRegelverk);
+
+  // Tab: Plandokumenter
+  const tabDokumenter = document.createElement('div');
+  tabDokumenter.id = 'tab-dokumenter';
+  tabDokumenter.className = 'law-categories';
+  tabDokumenter.style.display = 'none';
+  buildDocPanel(tabDokumenter);
+  panel.appendChild(tabDokumenter);
+
+  document.getElementById('map').appendChild(panel);
+  lawPanel = panel;
+}
+
+function buildDocPanel(container) {
   const intro = document.createElement('p');
   intro.className = 'law-intro';
-  intro.textContent =
-    'Følgende lover og forskrifter er relevante for det markerte området. Klikk på en paragraf for å gå direkte til lovdata.no.';
-  panel.appendChild(intro);
+  intro.textContent = 'Relevante plandokumenter og kartressurser for Arendal kommune og marine sjøarealer.';
+  container.appendChild(intro);
 
-  const lawsContainer = document.createElement('div');
-  lawsContainer.className = 'law-categories';
+  MUNICIPAL_DOCS.forEach(section => {
+    const details = document.createElement('details');
+    details.className = 'law-category';
+    details.open = true;
 
-  LAWS.forEach(cat => {
+    const summary = document.createElement('summary');
+    summary.className = 'law-category-header';
+    summary.innerHTML = `<span>📂</span><span>${section.title}</span>`;
+    details.appendChild(summary);
+
+    const body = document.createElement('div');
+    body.className = 'law-category-body';
+
+    section.docs.forEach(doc => {
+      const item = document.createElement('div');
+      item.className = 'doc-item';
+
+      const link = document.createElement('a');
+      link.href = doc.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'doc-link';
+      link.innerHTML = `${doc.name} <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
+      const desc = document.createElement('p');
+      desc.className = 'doc-desc';
+      desc.textContent = doc.desc;
+
+      item.appendChild(link);
+      item.appendChild(desc);
+      body.appendChild(item);
+    });
+
+    details.appendChild(body);
+    container.appendChild(details);
+  });
+}
+
+function renderLawsTab(zone) {
+  const container = lawPanel.querySelector('#tab-regelverk');
+  container.innerHTML = '';
+
+  const intro = document.createElement('p');
+  intro.className = 'law-intro';
+  intro.textContent = 'Klikk på en paragraf for å gå direkte til lovdata.no.';
+  container.appendChild(intro);
+
+  const filtered = filterLawsByZone(zone);
+
+  if (filtered.length === 0) {
+    container.innerHTML += '<p class="law-intro">Ingen lover funnet for dette området.</p>';
+    return;
+  }
+
+  filtered.forEach(cat => {
     const section = document.createElement('details');
     section.className = 'law-category';
     section.open = true;
@@ -308,46 +544,59 @@ function buildLawPanel() {
       parList.className = 'law-paragraphs';
       law.paragraphs.forEach(par => {
         const li = document.createElement('li');
-        const a = document.createElement('a');
-        a.href = par.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.innerHTML = `<strong>${par.ref}</strong> – ${par.desc}`;
-        li.appendChild(a);
+        li.innerHTML = `<a href="${par.url}" target="_blank" rel="noopener noreferrer"><strong>${par.ref}</strong> – ${par.desc}</a>`;
         parList.appendChild(li);
       });
       lawEl.appendChild(parList);
-
       body.appendChild(lawEl);
     });
 
     section.appendChild(body);
-    lawsContainer.appendChild(section);
+    container.appendChild(section);
   });
-
-  panel.appendChild(lawsContainer);
-  document.getElementById('map').appendChild(panel);
-  lawPanel = panel;
 }
 
-function showLawPanel(areaKm2) {
+function showLawPanel(areaKm2, zone) {
   if (!lawPanel) return;
-  const info = document.getElementById('law-area-info');
-  info.innerHTML = `<span class="area-label">Areal:</span> <strong>${formatArea(areaKm2)}</strong>`;
+  document.getElementById('law-area-info').innerHTML =
+    `<span class="area-label">Areal:</span> <strong>${formatArea(areaKm2)}</strong>`;
+
+  const banner = document.getElementById('zone-banner');
+  if (zone === null) {
+    banner.className = 'zone-banner loading';
+    banner.innerHTML = '<span class="zone-spinner"></span><span id="zone-text">Analyserer område…</span>';
+  }
+
   lawPanel.classList.add('open');
+}
+
+function updatePanelZone(zone, areaKm2) {
+  const info = ZONE_LABELS[zone] || ZONE_LABELS.unknown;
+  const count = countLaws(zone);
+
+  const banner = document.getElementById('zone-banner');
+  banner.className = `zone-banner zone-${zone}`;
+  banner.innerHTML = `
+    <div class="zone-row">
+      <span class="zone-badge" style="background:${info.color}">${info.label}</span>
+      <span class="zone-count"><strong>${count}</strong> lover / forskrifter gjelder</span>
+    </div>`;
+
+  renderLawsTab(zone);
 }
 
 function hideLawPanel() {
   if (lawPanel) lawPanel.classList.remove('open');
 }
 
-// ─── Layer switcher ───────────────────────────────────────────────────────────
+// ─── Lagvelger ───────────────────────────────────────────────────────────────
 let currentBase = 'osm';
 
 function buildLayerSwitcher() {
   const wrap = document.createElement('div');
   wrap.className = 'map-control layer-switcher';
 
+  // Kartlag-knapper
   Object.entries(BASE_LAYERS).forEach(([id, layer]) => {
     const btn = document.createElement('button');
     btn.textContent = layer.label;
@@ -356,16 +605,41 @@ function buildLayerSwitcher() {
       if (id === currentBase) return;
       map.getSource('base').setTiles(layer.tiles);
       currentBase = id;
-      wrap.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      wrap.querySelectorAll('button.base-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
+    btn.classList.add('base-btn');
     wrap.appendChild(btn);
   });
+
+  // Separator
+  const sep = document.createElement('span');
+  sep.className = 'layer-sep';
+  wrap.appendChild(sep);
+
+  // Havner og kaier-avkrysningsboks
+  const label = document.createElement('label');
+  label.className = 'harbour-toggle';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.id = 'harbour-cb';
+  cb.addEventListener('change', e => {
+    harboursEnabled = e.target.checked;
+    map.setLayoutProperty('harbours-layer', 'visibility', harboursEnabled ? 'visible' : 'none');
+    map.setLayoutProperty('harbours-labels', 'visibility', harboursEnabled ? 'visible' : 'none');
+    if (harboursEnabled) fetchHarbours();
+    else map.getSource('harbours').setData({ type: 'FeatureCollection', features: [] });
+  });
+  const cbLabel = document.createElement('span');
+  cbLabel.textContent = '⚓ Havner og kaier';
+  label.appendChild(cb);
+  label.appendChild(cbLabel);
+  wrap.appendChild(label);
 
   document.getElementById('map').appendChild(wrap);
 }
 
-// ─── Search bar ───────────────────────────────────────────────────────────────
+// ─── Søkefelt ────────────────────────────────────────────────────────────────
 function buildSearchBar() {
   const wrap = document.createElement('div');
   wrap.className = 'map-control search-bar';
@@ -393,7 +667,7 @@ function buildSearchBar() {
   document.getElementById('map').appendChild(wrap);
 }
 
-// ─── Draw control ────────────────────────────────────────────────────────────
+// ─── Tegn-kontroll ────────────────────────────────────────────────────────────
 function buildDrawControl() {
   const wrap = document.createElement('div');
   wrap.className = 'map-control draw-control';
@@ -406,52 +680,61 @@ function buildDrawControl() {
   drawBtn = btn;
 
   btn.addEventListener('click', () => {
-    if (draw.finished) {
-      clearDraw();
-    } else if (draw.active) {
-      clearDraw();
-    } else {
-      startDraw();
-    }
+    if (draw.finished || draw.active) clearDraw();
+    else startDraw();
   });
 
-  const hint = document.createElement('span');
-  hint.className = 'draw-hint';
-  hint.id = 'draw-hint';
-
   wrap.appendChild(btn);
-  wrap.appendChild(hint);
   document.getElementById('map').appendChild(wrap);
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 map.on('load', () => {
+  // Tegne-lag
   map.addSource('draw-line', { type: 'geojson', data: emptyFeature('LineString') });
   map.addSource('draw-fill', { type: 'geojson', data: emptyFeature('Polygon') });
+  map.addLayer({ id: 'draw-fill-layer', type: 'fill', source: 'draw-fill', paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.12 } });
+  map.addLayer({ id: 'draw-outline-layer', type: 'line', source: 'draw-fill', paint: { 'line-color': '#2563eb', 'line-width': 2 } });
+  map.addLayer({ id: 'draw-line-layer', type: 'line', source: 'draw-line', paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [4, 3] } });
 
+  // Havner og kaier-lag
+  map.addSource('harbours', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'draw-fill-layer',
-    type: 'fill',
-    source: 'draw-fill',
-    paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.12 },
+    id: 'harbours-layer',
+    type: 'circle',
+    source: 'harbours',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 14, 10],
+      'circle-color': '#0c2340',
+      'circle-stroke-color': '#fff',
+      'circle-stroke-width': 1.5,
+      'circle-opacity': 0.9,
+    },
   });
   map.addLayer({
-    id: 'draw-outline-layer',
-    type: 'line',
-    source: 'draw-fill',
-    paint: { 'line-color': '#2563eb', 'line-width': 2 },
-  });
-  map.addLayer({
-    id: 'draw-line-layer',
-    type: 'line',
-    source: 'draw-line',
-    paint: { 'line-color': '#2563eb', 'line-width': 2, 'line-dasharray': [4, 3] },
+    id: 'harbours-labels',
+    type: 'symbol',
+    source: 'harbours',
+    layout: {
+      visibility: 'none',
+      'text-field': ['coalesce', ['get', 'name'], ['get', 'ref']],
+      'text-font': ['Open Sans Regular'],
+      'text-size': 11,
+      'text-offset': [0, 1.4],
+      'text-anchor': 'top',
+      'text-optional': true,
+    },
+    paint: { 'text-color': '#0c2340', 'text-halo-color': '#fff', 'text-halo-width': 1.5 },
   });
 
+  // Karteventer for tegning og havner
   map.on('click', handleMapClick);
   map.on('dblclick', handleMapDblclick);
   map.on('mousemove', handleMapMousemove);
+  map.on('moveend', scheduleFetchHarbours);
 
+  // Bygg UI
   buildLayerSwitcher();
   buildSearchBar();
   buildDrawControl();

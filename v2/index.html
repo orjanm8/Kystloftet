@@ -4,15 +4,23 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kystloftet</title>
+    <title>Kystløftet</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; }
-      #map { width: 100%; height: 100%; }
+      #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+      #map { flex: 1; width: 100%; position: relative; }
     </style>
   </head>
   <body>
-    <div id="map"></div>
+    <div id="app">
+      <header class="kl-header">
+        <div class="kl-logo">KL</div>
+        <span class="kl-title">Kystløftet</span>
+        <span class="kl-subtitle">Arendal kommune</span>
+      </header>
+      <div id="map"></div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

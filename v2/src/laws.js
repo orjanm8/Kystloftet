@@ -1,8 +1,17 @@
-// Gjeldende regelverk for marine og kystnære arealer i Norge
-// Kilde: lovdata.no
+/**
+ * Gjeldende regelverk for marine og kystnære arealer i Norge
+ *
+ * zones: hvilke soner loven er relevant for
+ *   'land'    – på land (inkl. strandsone)
+ *   'coastal' – kystnære sjøområder: fjorder, havner, innenfor 1 nm
+ *   'sea'     – åpent hav / offshore
+ *
+ * Kilde: lovdata.no
+ */
 
 const L = id => `https://lovdata.no/lov/${id}`;
 const P = (id, par) => `https://lovdata.no/lov/${id}/${par}`;
+const F = id => `https://lovdata.no/forskrift/${id}`;
 
 export const LAWS = [
   {
@@ -14,7 +23,8 @@ export const LAWS = [
         name: 'Plan- og bygningsloven',
         ref: 'LOV-2008-06-27-71',
         url: L('2008-06-27-71'),
-        desc: 'Regulerer all arealbruk i sjø og strandsone. Forbyr som hovedregel tiltak innenfor 100-metersbeltet langs sjø.',
+        zones: ['land', 'coastal'],
+        desc: 'Regulerer arealbruk i sjø og strandsone. Forbyr som hovedregel tiltak innenfor 100-metersbeltet langs sjø og vassdrag. Kommunens arealplan styrer sjøarealene ut til 1 nautisk mil.',
         paragraphs: [
           { ref: '§ 1-8', desc: 'Forbud mot tiltak i 100-metersbeltet langs sjø og vassdrag', url: P('2008-06-27-71', '%C2%A71-8') },
           { ref: '§ 11-7', desc: 'Arealformål i kommuneplanens arealdel – sjø og vassdrag, LNFR', url: P('2008-06-27-71', '%C2%A711-7') },
@@ -33,7 +43,8 @@ export const LAWS = [
         name: 'Akvakulturloven',
         ref: 'LOV-2005-06-17-79',
         url: L('2005-06-17-79'),
-        desc: 'Regulerer all akvakulturvirksomhet i Norge, inkludert tildeling og godkjenning av lokalitetstillatelser.',
+        zones: ['coastal', 'sea'],
+        desc: 'Regulerer all akvakulturvirksomhet i Norge, inkludert tildeling og godkjenning av lokalitetstillatelser i sjø.',
         paragraphs: [
           { ref: '§ 2', desc: 'Virkeområde – all akvakultur i og utenfor norsk territorialfarvann', url: P('2005-06-17-79', '%C2%A72') },
           { ref: '§ 4', desc: 'Krav om tillatelse for å drive akvakultur', url: P('2005-06-17-79', '%C2%A74') },
@@ -46,6 +57,7 @@ export const LAWS = [
         name: 'Matloven',
         ref: 'LOV-2003-12-19-124',
         url: L('2003-12-19-124'),
+        zones: ['coastal', 'sea'],
         desc: 'Stiller krav til hygiene, sporbarhet og produksjonssikkerhet for sjømat, inkludert oppdrettsfisk.',
         paragraphs: [
           { ref: '§ 6', desc: 'Krav til hygiene og produksjonssikkerhet', url: P('2003-12-19-124', '%C2%A76') },
@@ -64,6 +76,7 @@ export const LAWS = [
         name: 'Havressurslova',
         ref: 'LOV-2008-06-06-37',
         url: L('2008-06-06-37'),
+        zones: ['coastal', 'sea'],
         desc: 'Regulerer høsting og utnyttelse av viltlevende marine ressurser. Fastsetter prinsippet om bærekraftig forvaltning.',
         paragraphs: [
           { ref: '§ 3', desc: 'Prinsippet om bærekraftig forvaltning av marine ressurser', url: P('2008-06-06-37', '%C2%A73') },
@@ -76,6 +89,7 @@ export const LAWS = [
         name: 'Deltakerloven',
         ref: 'LOV-1999-03-26-15',
         url: L('1999-03-26-15'),
+        zones: ['coastal', 'sea'],
         desc: 'Regulerer hvem som har adgang til å delta i norske fiskerier.',
         paragraphs: [
           { ref: '§ 4', desc: 'Krav om ervervstillatelse for å drive fiske', url: P('1999-03-26-15', '%C2%A74') },
@@ -93,9 +107,10 @@ export const LAWS = [
         name: 'Naturmangfoldloven',
         ref: 'LOV-2009-06-19-100',
         url: L('2009-06-19-100'),
+        zones: ['land', 'coastal', 'sea'],
         desc: 'Verner naturmangfoldet, inkludert marine habitater og arter. Gir grunnlag for oppretting av marine verneområder.',
         paragraphs: [
-          { ref: '§ 7', desc: 'Miljørettslige prinsipper (føre-var, samlet belastning, kostnadene bæres av tiltakshaver)', url: P('2009-06-19-100', '%C2%A77') },
+          { ref: '§ 7', desc: 'Miljørettslige prinsipper (føre-var, samlet belastning)', url: P('2009-06-19-100', '%C2%A77') },
           { ref: '§ 8', desc: 'Kunnskapsgrunnlaget – krav til utredning av konsekvenser', url: P('2009-06-19-100', '%C2%A78') },
           { ref: '§ 33', desc: 'Naturreservat – strengeste verneform', url: P('2009-06-19-100', '%C2%A733') },
           { ref: '§ 37', desc: 'Marine verneområder', url: P('2009-06-19-100', '%C2%A737') },
@@ -106,6 +121,7 @@ export const LAWS = [
         name: 'Forurensningsloven',
         ref: 'LOV-1981-03-13-6',
         url: L('1981-03-13-6'),
+        zones: ['land', 'coastal', 'sea'],
         desc: 'Regulerer forurensning, utslipp og avfall i sjø og strandsone. Forbyr forurensning uten tillatelse.',
         paragraphs: [
           { ref: '§ 7', desc: 'Plikt til å unngå forurensning', url: P('1981-03-13-6', '%C2%A77') },
@@ -118,6 +134,7 @@ export const LAWS = [
         name: 'Vannressursloven',
         ref: 'LOV-2000-11-24-82',
         url: L('2000-11-24-82'),
+        zones: ['land', 'coastal'],
         desc: 'Regulerer vassdrag og grunnvann, inkludert overgangsvann til sjø og kystvannsforekomster.',
         paragraphs: [
           { ref: '§ 1', desc: 'Formål – sikre forsvarlig bruk og forvaltning av vannressursene', url: P('2000-11-24-82', '%C2%A71') },
@@ -135,7 +152,8 @@ export const LAWS = [
         name: 'Havne- og farvannsloven',
         ref: 'LOV-2019-06-21-70',
         url: L('2019-06-21-70'),
-        desc: 'Regulerer bruk av sjøarealer, ankringsplasser, ferdsel, og tiltak i farvannet.',
+        zones: ['coastal'],
+        desc: 'Regulerer bruk av sjøarealer, ankringsplasser, ferdsel, og tiltak i farvannet innenfor norsk sjøterritorium.',
         paragraphs: [
           { ref: '§ 6', desc: 'Statens og kommunens ansvar for farvannet', url: P('2019-06-21-70', '%C2%A76') },
           { ref: '§ 14', desc: 'Tillatelse til tiltak i farvannet (installasjoner, mudring, dumping)', url: P('2019-06-21-70', '%C2%A714') },
@@ -147,6 +165,7 @@ export const LAWS = [
         name: 'Sjøloven',
         ref: 'LOV-1994-06-24-39',
         url: L('1994-06-24-39'),
+        zones: ['coastal', 'sea'],
         desc: 'Regulerer sjøfart, skip og ansvar ved ulykker, forurensning og kollisjon.',
         paragraphs: [
           { ref: '§ 151', desc: 'Ansvar for kollisjonsskade', url: P('1994-06-24-39', '%C2%A7151') },
@@ -164,7 +183,8 @@ export const LAWS = [
         name: 'Kulturminneloven',
         ref: 'LOV-1978-06-09-50',
         url: L('1978-06-09-50'),
-        desc: 'Alle kulturminner under vann som er eldre enn 100 år er automatisk fredet – dette gjelder skipsvrak, gjenstander og strukturer.',
+        zones: ['coastal', 'sea'],
+        desc: 'Alle kulturminner under vann som er eldre enn 100 år er automatisk fredet – skipsvrak, gjenstander og strukturer.',
         paragraphs: [
           { ref: '§ 4', desc: 'Definisjon av kulturminner og kulturmiljøer', url: P('1978-06-09-50', '%C2%A74') },
           { ref: '§ 9', desc: 'Meldeplikt ved funn av kulturminner', url: P('1978-06-09-50', '%C2%A79') },
@@ -182,6 +202,7 @@ export const LAWS = [
         name: 'Havenergilova',
         ref: 'LOV-2010-06-04-21',
         url: L('2010-06-04-21'),
+        zones: ['sea'],
         desc: 'Regulerer utbygging og drift av fornybare energianlegg til havs, herunder havvind og bølgekraft.',
         paragraphs: [
           { ref: '§ 2-1', desc: 'Virkeområde – fornybar energiproduksjon til havs', url: P('2010-06-04-21', '%C2%A72-1') },
@@ -199,13 +220,36 @@ export const LAWS = [
       {
         name: 'Forskrift om konsekvensutredninger',
         ref: 'FOR-2017-06-21-854',
-        url: 'https://lovdata.no/forskrift/2017-06-21-854',
+        url: F('2017-06-21-854'),
+        zones: ['land', 'coastal', 'sea'],
         desc: 'Krever konsekvensutredning (KU) for tiltak med vesentlige virkninger på miljø og samfunn, inkludert marine anlegg.',
         paragraphs: [
-          { ref: '§ 8', desc: 'Tiltak som alltid skal ha konsekvensutredning (vedlegg I)', url: 'https://lovdata.no/forskrift/2017-06-21-854/%C2%A78' },
-          { ref: '§ 10', desc: 'Tiltak som skal vurderes (vedlegg II)', url: 'https://lovdata.no/forskrift/2017-06-21-854/%C2%A710' },
+          { ref: '§ 8', desc: 'Tiltak som alltid skal ha konsekvensutredning (vedlegg I)', url: `${F('2017-06-21-854')}/%C2%A78` },
+          { ref: '§ 10', desc: 'Tiltak som skal vurderes (vedlegg II)', url: `${F('2017-06-21-854')}/%C2%A710` },
         ],
       },
     ],
   },
 ];
+
+// Sone-etikett for visning i panelet
+export const ZONE_LABELS = {
+  land: { label: 'Landområde', color: '#16a34a' },
+  coastal: { label: 'Kystområde', color: '#0369a1' },
+  sea: { label: 'Åpent hav', color: '#1e40af' },
+  unknown: { label: 'Ukjent sone', color: '#64748b' },
+};
+
+/** Returnerer alle lovene (individuelle law-objekter) som gjelder for gitt sone */
+export function filterLawsByZone(zone) {
+  if (zone === 'unknown') return LAWS; // vis alle hvis ukjent
+  return LAWS.map(cat => ({
+    ...cat,
+    laws: cat.laws.filter(law => law.zones.includes(zone)),
+  })).filter(cat => cat.laws.length > 0);
+}
+
+/** Teller totalt antall individuelle lover for gitt sone */
+export function countLaws(zone) {
+  return filterLawsByZone(zone).reduce((sum, cat) => sum + cat.laws.length, 0);
+}

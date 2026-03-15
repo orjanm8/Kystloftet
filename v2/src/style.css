@@ -1,6 +1,49 @@
 @import "tailwindcss";
 
-/* ─── Map control base ─────────────────────────────────────────────────────── */
+/* ─── KL Header ──────────────────────────────────────────────────────────────── */
+.kl-header {
+  height: 46px;
+  background: #0c2340;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  flex-shrink: 0;
+  z-index: 100;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.kl-logo {
+  background: #4fc3f7;
+  color: #0c2340;
+  font-size: 13px;
+  font-weight: 800;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+
+.kl-title {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.kl-subtitle {
+  color: #7ec8e3;
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 4px;
+  opacity: 0.85;
+}
+
+/* ─── Kartkontrollen base ────────────────────────────────────────────────────── */
 .map-control {
   position: absolute;
   z-index: 10;
@@ -12,7 +55,7 @@
   overflow: hidden;
 }
 
-/* ─── Search bar ─────────────────────────────────────────────────────────────── */
+/* ─── Søkefelt ───────────────────────────────────────────────────────────────── */
 .search-bar {
   top: 12px;
   left: 12px;
@@ -28,9 +71,7 @@
   color: #1e293b;
 }
 
-.search-bar input::placeholder {
-  color: #94a3b8;
-}
+.search-bar input::placeholder { color: #94a3b8; }
 
 .search-bar button {
   border: none;
@@ -43,21 +84,14 @@
   transition: background 0.15s;
 }
 
-.search-bar button:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-}
+.search-bar button:hover { background: #f1f5f9; color: #1e293b; }
+.search-bar button + button { border-left: 1px solid #e2e8f0; }
 
-.search-bar button + button {
-  border-left: 1px solid #e2e8f0;
-}
-
-/* ─── Draw control ───────────────────────────────────────────────────────────── */
+/* ─── Tegn-kontroll ──────────────────────────────────────────────────────────── */
 .draw-control {
   top: 56px;
   left: 12px;
   padding: 0;
-  gap: 0;
 }
 
 .draw-btn {
@@ -75,37 +109,25 @@
   white-space: nowrap;
 }
 
-.draw-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-}
+.draw-btn:hover { background: #f1f5f9; color: #1e293b; }
+.draw-btn.active { background: #eff6ff; color: #2563eb; }
 
-.draw-btn.active {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.draw-hint {
-  font-size: 12px;
-  color: #64748b;
-  padding: 0 10px 0 4px;
-  font-style: italic;
-}
-
-/* ─── Layer switcher ─────────────────────────────────────────────────────────── */
+/* ─── Lagvelger ──────────────────────────────────────────────────────────────── */
 .layer-switcher {
   bottom: 28px;
   left: 12px;
   gap: 2px;
   padding: 3px;
   border-radius: 10px;
+  flex-wrap: wrap;
+  max-width: 420px;
 }
 
-.layer-switcher button {
+.layer-switcher .base-btn {
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 6px 12px;
+  padding: 6px 11px;
   font-size: 13px;
   font-weight: 500;
   color: #475569;
@@ -114,22 +136,46 @@
   white-space: nowrap;
 }
 
-.layer-switcher button:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+.layer-switcher .base-btn:hover { background: #f1f5f9; color: #1e293b; }
+.layer-switcher .base-btn.active { background: #0c2340; color: #fff; }
+
+.layer-sep {
+  width: 1px;
+  background: #e2e8f0;
+  align-self: stretch;
+  margin: 4px 3px;
+  flex-shrink: 0;
 }
 
-.layer-switcher button.active {
-  background: #2563eb;
-  color: #fff;
+.harbour-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 7px;
+  transition: background 0.15s;
 }
 
-/* ─── Law panel ──────────────────────────────────────────────────────────────── */
+.harbour-toggle:hover { background: #f1f5f9; color: #1e293b; }
+
+.harbour-toggle input[type="checkbox"] {
+  accent-color: #0c2340;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* ─── Regelverkspanel ────────────────────────────────────────────────────────── */
 .law-panel {
   position: absolute;
   top: 0;
   right: 0;
-  width: 360px;
+  width: 370px;
   height: 100%;
   background: #fff;
   box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
@@ -137,7 +183,7 @@
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 
@@ -150,53 +196,144 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 13px 16px 11px;
+  background: #0c2340;
   flex-shrink: 0;
 }
 
 .law-panel-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
-.law-panel-icon {
-  font-size: 17px;
-}
+.law-panel-icon { font-size: 16px; }
 
 .law-panel-close {
   border: none;
-  background: transparent;
+  background: rgba(255,255,255,0.12);
   cursor: pointer;
-  color: #94a3b8;
-  font-size: 16px;
-  padding: 4px 6px;
-  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 5px;
   line-height: 1;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
 
-.law-panel-close:hover {
-  background: #f1f5f9;
-  color: #475569;
-}
+.law-panel-close:hover { background: rgba(255,255,255,0.25); }
 
-.law-area-info {
+/* Sone-banner */
+.zone-banner {
   padding: 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+}
+
+.zone-banner.loading {
+  background: #f8fafc;
+  gap: 8px;
   font-size: 13px;
-  background: #eff6ff;
-  color: #1e40af;
-  border-bottom: 1px solid #dbeafe;
+  color: #64748b;
+}
+
+.zone-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
   flex-shrink: 0;
 }
 
-.area-label {
-  color: #3b82f6;
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.zone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
+
+.zone-badge {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.zone-count {
+  font-size: 13px;
+  color: #334155;
+}
+
+.zone-count strong {
+  color: #0c2340;
+  font-size: 15px;
+}
+
+/* Areal */
+.law-area-info {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #f0f9ff;
+  color: #0369a1;
+  border-bottom: 1px solid #bae6fd;
+  flex-shrink: 0;
+}
+
+.area-label { color: #38bdf8; }
+
+/* Faner */
+.law-tabs {
+  display: flex;
+  border-bottom: 2px solid #e2e8f0;
+  flex-shrink: 0;
+  background: #f8fafc;
+}
+
+.law-tabs button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.law-tabs button.active {
+  color: #0c2340;
+  border-bottom-color: #0c2340;
+  font-weight: 600;
+}
+
+.law-tabs button:hover:not(.active) { color: #334155; }
+
+/* ─── Kategorier (felles for regelverk og dokumenter) ────────────────────────── */
+.law-categories {
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 24px;
+}
+
+.law-categories::-webkit-scrollbar { width: 5px; }
+.law-categories::-webkit-scrollbar-track { background: transparent; }
+.law-categories::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 
 .law-intro {
   padding: 10px 16px;
@@ -204,30 +341,15 @@
   color: #64748b;
   line-height: 1.5;
   border-bottom: 1px solid #f1f5f9;
-  flex-shrink: 0;
 }
 
-.law-categories {
-  overflow-y: auto;
-  flex: 1;
-  padding-bottom: 24px;
-}
-
-/* Custom scrollbar */
-.law-categories::-webkit-scrollbar { width: 6px; }
-.law-categories::-webkit-scrollbar-track { background: transparent; }
-.law-categories::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-
-/* ─── Category accordion ─────────────────────────────────────────────────────── */
-.law-category {
-  border-bottom: 1px solid #f1f5f9;
-}
+.law-category { border-bottom: 1px solid #f1f5f9; }
 
 .law-category-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 16px;
+  padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
   color: #334155;
@@ -248,27 +370,17 @@
   transition: transform 0.2s;
 }
 
-details:not([open]) .law-category-header::after {
-  transform: rotate(-90deg);
-}
+details:not([open]) .law-category-header::after { transform: rotate(-90deg); }
+.law-category-header:hover { background: #f1f5f9; }
+.law-category-body { padding: 4px 0 8px; }
 
-.law-category-header:hover {
-  background: #f1f5f9;
-}
-
-.law-category-body {
-  padding: 4px 0 8px;
-}
-
-/* ─── Individual law ─────────────────────────────────────────────────────────── */
+/* ─── Lov-element ────────────────────────────────────────────────────────────── */
 .law-item {
   padding: 10px 16px 12px;
   border-bottom: 1px solid #f8fafc;
 }
 
-.law-item:last-child {
-  border-bottom: none;
-}
+.law-item:last-child { border-bottom: none; }
 
 .law-name {
   display: inline-flex;
@@ -281,15 +393,12 @@ details:not([open]) .law-category-header::after {
   line-height: 1.4;
 }
 
-.law-name:hover {
-  text-decoration: underline;
-}
+.law-name:hover { text-decoration: underline; }
 
 .law-ref {
   font-size: 11px;
   font-weight: 400;
   color: #94a3b8;
-  white-space: nowrap;
 }
 
 .law-desc {
@@ -305,7 +414,7 @@ details:not([open]) .law-category-header::after {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .law-paragraphs li a {
@@ -329,4 +438,31 @@ details:not([open]) .law-category-header::after {
 .law-paragraphs li a strong {
   color: #2563eb;
   font-weight: 600;
+}
+
+/* ─── Dokument-element ───────────────────────────────────────────────────────── */
+.doc-item {
+  padding: 9px 16px 10px;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.doc-item:last-child { border-bottom: none; }
+
+.doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e40af;
+  text-decoration: none;
+}
+
+.doc-link:hover { text-decoration: underline; }
+
+.doc-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 3px;
+  line-height: 1.45;
 }
