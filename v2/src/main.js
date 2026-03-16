@@ -909,7 +909,7 @@ const DATASETS = [
   { id: 'admhavn-cb', layerId: 'admhavn-layer', label: 'Adm. havneområde',      color: '#2980b9' },
   { id: 'farts-cb',   layerId: 'farts-layer',   label: 'Fartsrestriksjoner',    color: '#c0392b' },
   { id: 'akva-cb',    layerId: 'akva-layer',     label: 'Akvakulturlokaliteter', color: '#27ae60' },
-  { id: 'vern-cb',    layerId: 'vern-layer',     label: 'Naturvernområder',      color: '#16a085' },
+  { id: 'vern-cb',    layerId: 'vern-layer',     label: 'Naturvernområder',      color: '#d95555' },
 ];
 
 function buildLayerSwitcher() {
