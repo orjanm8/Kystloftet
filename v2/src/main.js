@@ -904,98 +904,90 @@ function hideLawPanel() {
 // ─── Lagvelger ───────────────────────────────────────────────────────────────
 let currentBase = 'osm';
 
-function buildLayerSwitcher() {
-  const wrap = document.createElement('div');
-  wrap.className = 'map-control layer-switcher';
+const DATASETS = [
+  { id: 'harbour-cb', layerId: null,           label: 'Havner og kaier',       color: '#0c2340', special: 'harbours' },
+  { id: 'admhavn-cb', layerId: 'admhavn-layer', label: 'Adm. havneområde',      color: '#2980b9' },
+  { id: 'farts-cb',   layerId: 'farts-layer',   label: 'Fartsrestriksjoner',    color: '#c0392b' },
+  { id: 'akva-cb',    layerId: 'akva-layer',     label: 'Akvakulturlokaliteter', color: '#27ae60' },
+  { id: 'vern-cb',    layerId: 'vern-layer',     label: 'Naturvernområder',      color: '#16a085' },
+];
 
-  // Kartlag-knapper
+function buildLayerSwitcher() {
+  const panel = document.createElement('div');
+  panel.className = 'dataset-panel';
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'dataset-panel-hdr';
+  hdr.innerHTML = '<div class="dataset-panel-title">Datasett</div><div class="dataset-panel-sub">Velg datasett for å vise på kartet</div>';
+  panel.appendChild(hdr);
+
+  // Dataset list
+  const list = document.createElement('div');
+  list.className = 'dataset-list';
+
+  DATASETS.forEach(ds => {
+    const item = document.createElement('label');
+    item.className = 'dataset-item';
+    item.htmlFor = ds.id;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = ds.id;
+    cb.className = 'dataset-cb';
+    cb.addEventListener('change', e => {
+      if (ds.special === 'harbours') {
+        harboursEnabled = e.target.checked;
+        map.setLayoutProperty('harbours-layer', 'visibility', harboursEnabled ? 'visible' : 'none');
+        map.setLayoutProperty('harbours-labels', 'visibility', harboursEnabled ? 'visible' : 'none');
+        if (harboursEnabled) fetchHarbours();
+        else map.getSource('harbours').setData({ type: 'FeatureCollection', features: [] });
+      } else {
+        map.setLayoutProperty(ds.layerId, 'visibility', e.target.checked ? 'visible' : 'none');
+      }
+      item.classList.toggle('active', e.target.checked);
+    });
+
+    const dot = document.createElement('span');
+    dot.className = 'dataset-dot';
+    dot.style.background = ds.color;
+
+    const name = document.createElement('span');
+    name.className = 'dataset-name';
+    name.textContent = ds.label;
+
+    item.appendChild(cb);
+    item.appendChild(dot);
+    item.appendChild(name);
+    list.appendChild(item);
+  });
+
+  panel.appendChild(list);
+
+  // Kartgrunnlag-seksjon
+  const baseSep = document.createElement('div');
+  baseSep.className = 'dataset-base-sep';
+  baseSep.textContent = 'Kartgrunnlag';
+  panel.appendChild(baseSep);
+
+  const baseBtns = document.createElement('div');
+  baseBtns.className = 'dataset-base-btns';
   Object.entries(BASE_LAYERS).forEach(([id, layer]) => {
     const btn = document.createElement('button');
     btn.textContent = layer.label;
-    if (id === currentBase) btn.classList.add('active');
+    btn.className = 'dataset-base-btn' + (id === currentBase ? ' active' : '');
     btn.addEventListener('click', () => {
       if (id === currentBase) return;
       map.getSource('base').setTiles(layer.tiles);
       currentBase = id;
-      wrap.querySelectorAll('button.base-btn').forEach(b => b.classList.remove('active'));
+      baseBtns.querySelectorAll('.dataset-base-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
-    btn.classList.add('base-btn');
-    wrap.appendChild(btn);
+    baseBtns.appendChild(btn);
   });
+  panel.appendChild(baseBtns);
 
-  // Separator
-  const sep = document.createElement('span');
-  sep.className = 'layer-sep';
-  wrap.appendChild(sep);
-
-  // Havner og kaier (Overpass / OSM)
-  const label = document.createElement('label');
-  label.className = 'harbour-toggle';
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.id = 'harbour-cb';
-  cb.addEventListener('change', e => {
-    harboursEnabled = e.target.checked;
-    map.setLayoutProperty('harbours-layer', 'visibility', harboursEnabled ? 'visible' : 'none');
-    map.setLayoutProperty('harbours-labels', 'visibility', harboursEnabled ? 'visible' : 'none');
-    if (harboursEnabled) fetchHarbours();
-    else map.getSource('harbours').setData({ type: 'FeatureCollection', features: [] });
-  });
-  const cbLabel = document.createElement('span');
-  cbLabel.textContent = '⚓ Havner og kaier';
-  label.appendChild(cb);
-  label.appendChild(cbLabel);
-  wrap.appendChild(label);
-
-  // Geonorge Havnedata – alle lag
-  const sep2 = document.createElement('span');
-  sep2.className = 'layer-sep';
-  wrap.appendChild(sep2);
-
-  [
-    { id: 'admhavn-cb', layerId: 'admhavn-layer', label: '🟦 Adm. havneområde' },
-    { id: 'farts-cb',   layerId: 'farts-layer',   label: '⚡ Fartsrestriksjoner' },
-  ].forEach(({ id, layerId, label }) => {
-    const lbl = document.createElement('label');
-    lbl.className = 'harbour-toggle';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = id;
-    cb.addEventListener('change', e => {
-      map.setLayoutProperty(layerId, 'visibility', e.target.checked ? 'visible' : 'none');
-    });
-    const span = document.createElement('span');
-    span.textContent = label;
-    lbl.appendChild(cb);
-    lbl.appendChild(span);
-    wrap.appendChild(lbl);
-  });
-
-  const sep3 = document.createElement('span');
-  sep3.className = 'layer-sep';
-  wrap.appendChild(sep3);
-
-  [
-    { id: 'akva-cb', layerId: 'akva-layer', label: '🐟 Akvakulturlokaliteter' },
-    { id: 'vern-cb', layerId: 'vern-layer', label: '🌿 Naturvernområder' },
-  ].forEach(({ id, layerId, label }) => {
-    const lbl = document.createElement('label');
-    lbl.className = 'harbour-toggle';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = id;
-    cb.addEventListener('change', e => {
-      map.setLayoutProperty(layerId, 'visibility', e.target.checked ? 'visible' : 'none');
-    });
-    const span = document.createElement('span');
-    span.textContent = label;
-    lbl.appendChild(cb);
-    lbl.appendChild(span);
-    wrap.appendChild(lbl);
-  });
-
-  document.getElementById('map').appendChild(wrap);
+  document.getElementById('map').appendChild(panel);
 }
 
 // ─── Søkefelt ────────────────────────────────────────────────────────────────
