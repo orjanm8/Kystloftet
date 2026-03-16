@@ -46,11 +46,11 @@ const kystverketWMS =
 
 // ─── WMS GetFeatureInfo – lag som kan forespørres ────────────────────────────
 const WMS_QUERYABLE = [
-  { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',                                                      layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)' },
-  { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'administrativthavneomrade', label: 'Adm. havneområde' },
-  { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner' },
-  { layerId: 'akva-layer',       wmsUrl: 'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer',       layer: 'akvakultur_lokaliteter',    label: 'Akvakulturlokaliteter',     infoFormat: 'text/html' },
-  { layerId: 'vern-layer',       wmsUrl: 'https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer',             layer: 'naturvern_omrade',          label: 'Naturvernområder',          infoFormat: 'application/geo+json' },
+  { layerId: 'kystverket-layer', wmsUrl: 'https://wms.kystverket.no/v1/wms',                                                      layer: 'nautiske_kart',             label: 'Nautiske kart (Kystverket)',  infoFormat: 'text/html' },
+  { layerId: 'admhavn-layer',    wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'administrativthavneomrade', label: 'Adm. havneområde',            infoFormat: 'text/html' },
+  { layerId: 'farts-layer',      wmsUrl: 'https://wms.geonorge.no/skwms1/wms.havnedata',                                          layer: 'fartsrestriksjoner',        label: 'Fartsrestriksjoner',          infoFormat: 'text/html' },
+  { layerId: 'akva-layer',       wmsUrl: 'https://gis.fiskeridir.no/server/services/fiskeridirWMS_akva/MapServer/WMSServer',       layer: 'akvakultur_lokaliteter',    label: 'Akvakulturlokaliteter',       infoFormat: 'text/html' },
+  { layerId: 'vern-layer',       wmsUrl: 'https://kart.miljodirektoratet.no/arcgis/services/vern/MapServer/WMSServer',             layer: 'naturvern_omrade',          label: 'Naturvernområder',            infoFormat: 'text/html' },
 ];
 
 // ─── Map (sentrert på Arendal / Aust-Agder) ───────────────────────────────────
@@ -608,7 +608,7 @@ function renderWmsProperties(props) {
 }
 
 async function queryWmsFeatureInfo(e) {
-  if (!wmsInfoPanel || draw.active || draw.finished) return;
+  if (!wmsInfoPanel || draw.active) return;
 
   const visibleLayers = WMS_QUERYABLE.filter(cfg => {
     try {
