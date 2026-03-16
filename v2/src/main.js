@@ -61,10 +61,10 @@ const map = new maplibregl.Map({
     sources: {
       base: {
         type: 'raster',
-        tiles: BASE_LAYERS.osm.tiles,
+        tiles: BASE_LAYERS.graatone.tiles,
         tileSize: 256,
-        attribution: BASE_LAYERS.osm.attribution,
-        maxzoom: BASE_LAYERS.osm.maxzoom,
+        attribution: BASE_LAYERS.graatone.attribution,
+        maxzoom: BASE_LAYERS.graatone.maxzoom,
       },
       kystverket: {
         type: 'raster',
@@ -902,7 +902,7 @@ function hideLawPanel() {
 }
 
 // ─── Lagvelger ───────────────────────────────────────────────────────────────
-let currentBase = 'osm';
+let currentBase = 'graatone';
 
 const DATASETS = [
   { id: 'harbour-cb', layerId: null,           label: 'Havner og kaier',       color: '#0c2340', special: 'harbours' },
